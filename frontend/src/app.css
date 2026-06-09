@@ -1,0 +1,210 @@
+/* FHUB Direction A - clean global design system */
+
+:root {
+  color-scheme: dark;
+  --fhub-bg: #080a12;
+  --fhub-bg-soft: #10131d;
+  --fhub-surface: rgba(15, 20, 33, 0.78);
+  --fhub-surface-strong: rgba(20, 26, 42, 0.92);
+  --fhub-border: rgba(148, 163, 184, 0.16);
+  --fhub-border-strong: rgba(167, 139, 250, 0.34);
+  --fhub-text: #f8fafc;
+  --fhub-muted: #aab4c3;
+  --fhub-violet: #a78bfa;
+  --fhub-gold: #f8c14a;
+  --fhub-cyan: #38bdf8;
+  --fhub-danger: #f87171;
+  --fhub-shadow-soft: 0 18px 48px rgba(0, 0, 0, 0.26);
+  --fhub-shadow-lift: 0 24px 70px rgba(0, 0, 0, 0.34);
+  --family-accent: var(--fhub-violet);
+  --family-accent-2: var(--fhub-gold);
+  --family-blue: var(--fhub-cyan);
+  --family-text: var(--fhub-text);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+}
+
+body {
+  background:
+    radial-gradient(circle at 10% -8%, rgba(124, 58, 237, 0.18), transparent 32%),
+    radial-gradient(circle at 92% 2%, rgba(248, 193, 74, 0.12), transparent 28%),
+    linear-gradient(180deg, var(--fhub-bg) 0%, var(--fhub-bg-soft) 48%, #070910 100%);
+  color: var(--fhub-text);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  overscroll-behavior-y: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.16;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  background-size: 32px 32px;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.72), transparent 84%);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled,
+input:disabled,
+select:disabled,
+textarea:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+img {
+  max-width: 100%;
+}
+
+::selection {
+  background: rgba(167, 139, 250, 0.36);
+  color: #ffffff;
+}
+
+input,
+select,
+textarea {
+  background: rgba(8, 11, 20, 0.76);
+  border: 1px solid var(--fhub-border);
+  color: var(--fhub-text);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: rgba(170, 180, 195, 0.72);
+}
+
+.material-icons {
+  font-size: 1.2em;
+  line-height: 1;
+}
+
+:global(.glass-panel),
+:global(.section-box),
+:global(.control-bar),
+:global(.bento-card),
+:global(.filter-sidebar),
+:global(.table-wrapper),
+:global(.settings-section),
+:global(.settings-card),
+:global(.fshare-card),
+:global(.server-fshare-panel),
+:global(.download-card),
+:global(.media-card),
+:global(.result-list-item),
+:global(.quality-card),
+:global(.episode-card),
+:global(.folder-card),
+:global(.detail-card),
+:global(.info-panel),
+:global(.stat-panel),
+:global(.smart-results-panel),
+:global(.identity-card),
+:global(.media-sidebar-card),
+:global(.family-panel),
+:global(.family-glass) {
+  background: linear-gradient(180deg, var(--fhub-surface-strong), rgba(10, 14, 24, 0.78)) !important;
+  border: 1px solid var(--fhub-border) !important;
+  border-radius: 18px !important;
+  box-shadow: var(--fhub-shadow-soft) !important;
+  backdrop-filter: blur(18px) saturate(145%);
+}
+
+:global(.btn-primary),
+:global(.primary-btn),
+:global(.fhub-btn--primary),
+:global(.get-btn),
+:global(.tv-get-btn),
+:global(.smart-grab-btn),
+:global(.login-btn) {
+  background: linear-gradient(135deg, var(--fhub-gold), var(--fhub-violet)) !important;
+  border: 1px solid rgba(248, 193, 74, 0.24) !important;
+  color: #080a12 !important;
+  box-shadow: 0 14px 34px rgba(167, 139, 250, 0.22) !important;
+}
+
+:global(.btn-secondary),
+:global(.action-btn),
+:global(.filter-toggle-btn),
+:global(.toggle-btn),
+:global(.mini-action),
+:global(.history-chip),
+:global(.saved-chip) {
+  background: rgba(255, 255, 255, 0.055) !important;
+  border: 1px solid var(--fhub-border) !important;
+  color: var(--fhub-text) !important;
+}
+
+:global(.score-bar),
+:global(.tv-score-bar),
+:global(.progress-fill),
+:global(.download-progress-fill) {
+  background: linear-gradient(90deg, var(--fhub-cyan), var(--fhub-violet), var(--fhub-gold)) !important;
+  border-radius: 999px !important;
+}
+
+:global(.score-track),
+:global(.score-track.large),
+:global(.tv-score-track),
+:global(.progress-track),
+:global(.download-progress-bar) {
+  background: rgba(148, 163, 184, 0.14) !important;
+  border-radius: 999px !important;
+}
+
+:global(.badge),
+:global(.badge-pill),
+:global(.status-pill),
+:global(.tv-badge),
+:global(.downloaded-badge) {
+  border-radius: 999px !important;
+  background: rgba(124, 58, 237, 0.18) !important;
+  border: 1px solid rgba(167, 139, 250, 0.24) !important;
+  color: #e9d5ff !important;
+  box-shadow: none !important;
+}
+
+@media (max-width: 720px) {
+  body::before {
+    background-size: 26px 26px;
+    opacity: 0.18;
+  }
+
+  :global(h1) {
+    font-size: clamp(2.25rem, 13vw, 3.6rem) !important;
+    line-height: 0.94 !important;
+  }
+}

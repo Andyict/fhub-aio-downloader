@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  fhub:
+    # Production example for a prebuilt image.
+    # If you build from source, use docker-compose.yml instead.
+    image: ghcr.io/nas2nd/fhub:latest
+    container_name: fhub
+    restart: unless-stopped
+
+    ports:
+      # HOST_PORT:CONTAINER_PORT
+      # Open FHub at http://NAS_IP:8584
+      # If 8584 is already used, change only the left side, e.g. "8585:8484".
+      - "8584:8484"
+
+    volumes:
+      # Persistent app data: database, config, FShare accounts, settings.
+      # Change the host side to your preferred Docker app-data folder.
+      # Keep the container path /appData.
+      - /volume1/docker/fhub/appData:/appData
+
+      # Downloads/media folder on the host NAS.
+      # IMPORTANT: change /volume1/Video to your real folder if needed.
+      # Keep the container path /downloads unless FHUB_DOWNLOADS_DIR is changed too.
+      - /volume1/Video:/downloads
+
+    environment:
+      - TZ=Asia/Ho_Chi_Minh
+      - FHUB_APPDATA_DIR=/appData
+      - FHUB_DOWNLOADS_DIR=/downloads
+
+      # Public-safe defaults: stable on small/older NAS devices.
+      - FHUB_SEGMENTS_PER_DOWNLOAD=16
+      - FHUB_MAX_CONCURRENT=4
+
+      - RUST_LOG=fhub=info,tower_http=info
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8484/api/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s

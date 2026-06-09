@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FHub Cinematic UI Demo</title>
+  <link rel="stylesheet" href="/cinematic-theme.css" />
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; overflow-x: hidden; }
+    .demo-shell { display: grid; grid-template-columns: 238px minmax(0, 1fr) 390px; min-height: 100vh; }
+    .demo-sidebar { padding: 22px 16px; border-right: 1px solid rgba(245,184,92,.16); background: linear-gradient(180deg, rgba(8,5,4,.98), rgba(18,10,7,.92)); }
+    .brand { color: #f5b85c; font-size: 34px; font-weight: 950; letter-spacing: .08em; line-height: .9; }
+    .tag { color: #c7b5a2; font-size: 11px; letter-spacing: .22em; margin-top: 6px; }
+    .nav { display: grid; gap: 8px; margin-top: 34px; }
+    .nav a { display: flex; align-items: center; gap: 12px; padding: 13px 15px; border-radius: 999px; color: #d9c7b6; text-decoration: none; border: 1px solid transparent; }
+    .nav a.active { color: #fff7ed; background: linear-gradient(135deg, rgba(245,158,11,.2), rgba(225,29,72,.1)); border-color: rgba(245,184,92,.24); }
+    .premium { margin-top: auto; margin-top: 42px; padding: 18px; border: 1px solid rgba(245,184,92,.2); border-radius: 22px; background: rgba(255,247,237,.055); color: #ffe8c2; }
+    .premium button, .primary { width: 100%; height: 44px; border: 0; border-radius: 999px; margin-top: 14px; background: linear-gradient(135deg, #f5b85c 0%, #c2410c 58%, #7f1d1d 100%); color: #160b05; font-weight: 900; }
+    .main { padding: 18px; min-width: 0; }
+    .topbar { height: 54px; display: flex; align-items: center; justify-content: center; gap: 14px; }
+    .search { width: min(100%, 620px); height: 44px; border-radius: 999px; border: 1px solid rgba(255,214,164,.16); background: rgba(4,3,3,.72); color: #fff8ee; padding: 0 18px; }
+    .hero { position: relative; min-height: 290px; margin-top: 4px; border-radius: 28px; overflow: hidden; border: 1px solid rgba(255,214,164,.16); background: linear-gradient(90deg, rgba(8,5,4,.88), rgba(8,5,4,.22)), url('https://image.tmdb.org/t/p/original/8uO0gUM8aNqYLs1OsTBQiXu0fEv.jpg') center/cover; box-shadow: 0 34px 90px rgba(0,0,0,.48); }
+    .hero-content { position: absolute; left: 42px; bottom: 36px; max-width: 540px; }
+    .hero h1 { margin: 0; font-size: clamp(40px, 5vw, 78px); letter-spacing: .18em; color: #fff7ed; }
+    .chips { display: flex; gap: 8px; margin: 12px 0; flex-wrap: wrap; }
+    .chip { padding: 6px 10px; border-radius: 999px; border: 1px solid rgba(245,184,92,.24); color: #ffe8c2; background: rgba(245,184,92,.12); font-size: 12px; }
+    .section-head { display: flex; justify-content: space-between; align-items: center; margin: 22px 0 12px; color: #ffe8c2; }
+    .poster-row { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
+    .poster { min-height: 220px; border-radius: 18px; border: 1px solid rgba(255,214,164,.14); background: linear-gradient(180deg, rgba(25,14,10,.2), rgba(7,5,4,.9)), var(--img) center/cover; overflow: hidden; position: relative; box-shadow: 0 18px 48px rgba(0,0,0,.4); }
+    .poster span { position: absolute; left: 12px; right: 12px; bottom: 12px; color: #fff8ee; font-weight: 800; font-size: 13px; }
+    .grid-two { display: grid; grid-template-columns: 1.1fr .9fr; gap: 14px; margin-top: 16px; }
+    .panel { border: 1px solid rgba(255,214,164,.16); border-radius: 24px; background: linear-gradient(180deg, rgba(29,18,13,.84), rgba(11,7,6,.76)); box-shadow: 0 28px 90px rgba(0,0,0,.38), inset 0 1px 0 rgba(255,255,255,.055); padding: 18px; }
+    .detail { display: grid; grid-template-columns: 132px 1fr; gap: 18px; }
+    .cover { min-height: 190px; border-radius: 16px; background: url('https://image.tmdb.org/t/p/w500/ptpr0kGAckfQkJeJIt8st5dglvd.jpg') center/cover; }
+    .genre-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .genre { padding: 14px; border-radius: 16px; background: rgba(255,247,237,.055); border: 1px solid rgba(255,214,164,.12); color: #d9c7b6; }
+    .side { padding: 18px 18px 18px 0; display: grid; gap: 14px; align-content: start; }
+    .fshare input { width: 100%; height: 48px; border-radius: 16px; border: 1px solid rgba(255,214,164,.16); background: rgba(4,3,3,.72); color: #fff8ee; padding: 0 14px; }
+    .filebox { margin-top: 14px; padding: 16px; border-radius: 18px; background: rgba(255,247,237,.045); border: 1px solid rgba(255,214,164,.1); color: #d9c7b6; }
+    .filebox strong { color: #fff8ee; display: block; margin-bottom: 10px; }
+    .queue-item { display: grid; grid-template-columns: 58px 1fr 42px; gap: 12px; align-items: center; padding: 10px; border-radius: 18px; background: rgba(255,247,237,.045); border: 1px solid rgba(255,214,164,.09); margin-top: 10px; }
+    .thumb { width: 58px; height: 58px; border-radius: 12px; background: var(--img) center/cover; }
+    .bar { height: 6px; border-radius: 999px; background: rgba(255,214,164,.12); overflow: hidden; margin-top: 8px; }
+    .bar i { display: block; height: 100%; width: var(--w); background: linear-gradient(90deg, #f97316, #f5b85c, #fff3d0); }
+    .pause { width: 38px; height: 38px; border-radius: 50%; border: 1px solid rgba(255,214,164,.16); display: grid; place-items: center; color: #ffe8c2; }
+    @media (max-width: 1180px) { .demo-shell { grid-template-columns: 86px minmax(0, 1fr); } .demo-sidebar { padding: 16px 10px; } .brand { font-size: 18px; } .tag, .nav span, .premium { display: none; } .side { grid-column: 1 / -1; padding: 14px; } .poster-row { grid-template-columns: repeat(3,1fr); } }
+    @media (max-width: 760px) { .demo-shell { display: block; } .demo-sidebar { display: none; } .main { padding: 10px; } .poster-row { grid-template-columns: repeat(2,1fr); } .grid-two, .detail { grid-template-columns: 1fr; } .hero { min-height: 360px; } .hero-content { left: 22px; right: 22px; } }
+  </style>
+</head>
+<body>
+  <div class="demo-shell">
+    <aside class="demo-sidebar">
+      <div class="brand">FHUB</div><div class="tag">YOUR MOVIE HUB</div>
+      <nav class="nav">
+        <a class="active" href="#">⌂ <span>Trang chủ</span></a><a href="#">▣ <span>Phim mới</span></a><a href="#">▥ <span>Phim bộ</span></a><a href="#">♡ <span>Yêu thích</span></a><a href="#">⇩ <span>Đang tải</span></a><a href="#">⚙ <span>Cài đặt</span></a>
+      </nav>
+      <div class="premium"><strong>FHUB PREMIUM</strong><br><small>Tốc độ tối đa · Không giới hạn</small><button>Nâng cấp ngay</button></div>
+    </aside>
+    <main class="main">
+      <div class="topbar"><input class="search" placeholder="Tìm kiếm phim, series..." /></div>
+      <section class="hero"><div class="hero-content"><h1>DUNE</h1><div class="chips"><span class="chip">2024</span><span class="chip">Sci-Fi</span><span class="chip">4K UHD</span></div><p>Tiếp nối hành trình của Paul Atreides, khám phá định mệnh và cuộc chiến giành lấy tương lai.</p><button class="primary" style="width:140px">▶ Xem ngay</button></div></section>
+      <div class="section-head"><strong>Phim mới cập nhật</strong><small>Xem tất cả ›</small></div>
+      <div class="poster-row">
+        <div class="poster" style="--img:url('https://image.tmdb.org/t/p/w500/1pdfLvkbY9ohJlCjQH2CZjjYVvJ.jpg')"><span>Dune: Part Two</span></div><div class="poster" style="--img:url('https://image.tmdb.org/t/p/w500/tMefBSflR6PGQLv7WvFPpKLZkyk.jpg')"><span>Godzilla x Kong</span></div><div class="poster" style="--img:url('https://image.tmdb.org/t/p/w500/8cdWjvZQUExUUTzyp4t6EDMubfO.jpg')"><span>Deadpool & Wolverine</span></div><div class="poster" style="--img:url('https://image.tmdb.org/t/p/w500/74xTEgt7R36Fpooo50r9T25onhq.jpg')"><span>The Batman</span></div><div class="poster" style="--img:url('https://image.tmdb.org/t/p/w500/ptpr0kGAckfQkJeJIt8st5dglvd.jpg')"><span>Oppenheimer</span></div><div class="poster" style="--img:url('https://image.tmdb.org/t/p/w500/fiVW06jE7z9YnO4trhaMEdclSiC.jpg')"><span>Fast X</span></div>
+      </div>
+      <div class="grid-two">
+        <section class="panel detail"><div class="cover"></div><div><h2>OPPENHEIMER</h2><div class="chips"><span class="chip">★ 8.6</span><span class="chip">4K</span><span class="chip">Dolby Atmos</span></div><p>The story of J. Robert Oppenheimer's role in the development of the atomic bomb.</p><button class="primary" style="width:128px">⇩ Tải ngay</button></div></section>
+        <section class="panel"><h3>Thể loại nổi bật</h3><div class="genre-grid"><div class="genre">Hành động<br><small>1,234 phim</small></div><div class="genre">Viễn tưởng<br><small>862 phim</small></div><div class="genre">Kinh dị<br><small>567 phim</small></div><div class="genre">Tâm lý<br><small>432 phim</small></div></div></section>
+      </div>
+    </main>
+    <aside class="side">
+      <section class="panel fshare"><h3>FSHARE DOWNLOAD PANEL</h3><p>Tải phim qua FShare</p><input placeholder="Nhập link FShare tại đây..." /><div class="filebox"><strong>Dune.Part.Two.2024.2160p.UHD.BluRay.REMUX.HEVC.Atmos.mkv</strong><div>Dung lượng: 24.6 GB · 4K (2160p) · HEVC · Atmos</div></div><button class="primary">⇩ Tải ngay</button></section>
+      <section class="panel"><h3>DANH SÁCH ĐANG TẢI</h3><div class="queue-item"><div class="thumb" style="--img:url('https://image.tmdb.org/t/p/w200/1pdfLvkbY9ohJlCjQH2CZjjYVvJ.jpg')"></div><div><strong>Dune.Part.Two.2160p...</strong><small>24.6 GB / 61.3 GB</small><div class="bar"><i style="--w:62%"></i></div></div><div class="pause">Ⅱ</div></div><div class="queue-item"><div class="thumb" style="--img:url('https://image.tmdb.org/t/p/w200/ptpr0kGAckfQkJeJIt8st5dglvd.jpg')"></div><div><strong>Oppenheimer.2160p...</strong><small>15.2 GB / 63.4 GB</small><div class="bar"><i style="--w:38%"></i></div></div><div class="pause">Ⅱ</div></div><div class="queue-item"><div class="thumb" style="--img:url('https://image.tmdb.org/t/p/w200/74xTEgt7R36Fpooo50r9T25onhq.jpg')"></div><div><strong>The.Batman.2022...</strong><small>8.7 GB / 42.1 GB</small><div class="bar"><i style="--w:24%"></i></div></div><div class="pause">Ⅱ</div></div></section>
+    </aside>
+  </div>
+</body>
+</html>

@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  fhub-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: fhub:dev
+    container_name: fhub-dev
+    restart: unless-stopped
+
+    ports:
+      # Dev/test clone. Stable FHub remains on http://NAS_IP:8584
+      - "8484:8484"
+
+    volumes:
+      # Cloned persistent app data for dev testing only
+      - fhub_dev_appdata:/appData
+      # Same NAS downloads directory as stable; download actions still touch shared storage
+      - /volume1/Video:/downloads
+
+    environment:
+      - TZ=Asia/Ho_Chi_Minh
+      - FHUB_APPDATA_DIR=/appData
+      - FHUB_DOWNLOADS_DIR=/downloads
+      # Public-safe defaults: stable on small NAS, configurable upward via UI/env presets.
+      - FHUB_SEGMENTS_PER_DOWNLOAD=16
+      - FHUB_MAX_CONCURRENT=4
+      - RUST_LOG=fhub=info,tower_http=info
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8484/api/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  fhub_dev_appdata:

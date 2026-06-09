@@ -1,0 +1,1049 @@
+/*
+  FHub Cinematic Theme
+  Scope: visual refresh only. This file is intentionally loaded after the Svelte bundle
+  from app.html so it can unify older component-level theme layers without touching logic.
+*/
+:root {
+  --cinema-black: #050404;
+  --cinema-ink: #0d0807;
+  --cinema-panel: rgba(18, 12, 10, 0.78);
+  --cinema-panel-strong: rgba(24, 15, 12, 0.92);
+  --cinema-card: rgba(255, 247, 237, 0.055);
+  --cinema-line: rgba(255, 214, 164, 0.18);
+  --cinema-line-strong: rgba(245, 158, 11, 0.34);
+  --cinema-text: #fff8ee;
+  --cinema-muted: #c7b5a2;
+  --cinema-gold: #f5b85c;
+  --cinema-amber: #f59e0b;
+  --cinema-red: #e11d48;
+  --cinema-green: #34d399;
+  --cinema-shadow: 0 28px 90px rgba(0, 0, 0, 0.42);
+  --cinema-inner: inset 0 1px 0 rgba(255, 255, 255, 0.055);
+  --color-primary: var(--cinema-gold) !important;
+  --color-secondary: #ffd18a !important;
+  --color-accent: #fff3d0 !important;
+  --fhub-line: var(--cinema-line) !important;
+  --fhub-stroke: rgba(245, 158, 11, 0.24) !important;
+  --fhub-soft-line: var(--cinema-line) !important;
+  --fhub-soft-line-strong: var(--cinema-line-strong) !important;
+}
+
+html,
+body {
+  background: #050404 !important;
+  color: var(--cinema-text) !important;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 18% 8%, rgba(245, 158, 11, 0.16), transparent 28%),
+    radial-gradient(circle at 82% 12%, rgba(225, 29, 72, 0.10), transparent 22%),
+    radial-gradient(circle at 52% 95%, rgba(245, 184, 92, 0.10), transparent 26%),
+    linear-gradient(180deg, #090605 0%, #120a08 44%, #060404 100%) !important;
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.28;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    radial-gradient(circle at 50% 50%, rgba(255, 214, 164, 0.10) 0 1px, transparent 1.5px);
+  background-size: 100% 4px, 18px 18px;
+  mix-blend-mode: screen;
+}
+
+.app-shell,
+.main-viewport,
+.view-container,
+.transition-wrapper,
+.downloads-container,
+.discover-page,
+.settings-page {
+  background: transparent !important;
+}
+
+.glass-sidebar {
+  background:
+    linear-gradient(180deg, rgba(8, 5, 4, 0.98), rgba(18, 10, 7, 0.92)) !important;
+  border-right: 1px solid rgba(245, 184, 92, 0.18) !important;
+  box-shadow: 28px 0 90px rgba(0, 0, 0, 0.38) !important;
+}
+
+.glass-sidebar::before {
+  opacity: 0.06 !important;
+  background-image:
+    linear-gradient(90deg, transparent 0 9px, rgba(245, 184, 92, 0.16) 9px 10px, transparent 10px 19px),
+    radial-gradient(circle, rgba(245, 184, 92, 0.42) 1px, transparent 1.2px) !important;
+  background-size: 20px 100%, 9px 9px !important;
+}
+
+.logo-container,
+.brand-logo-img {
+  filter: drop-shadow(0 16px 30px rgba(245, 158, 11, 0.22)) !important;
+}
+
+.nav-item,
+.bottom-nav-item,
+.nav-item-signout {
+  border-radius: 999px !important;
+  clip-path: none !important;
+  letter-spacing: 0.015em !important;
+}
+
+.nav-item:hover,
+.bottom-nav-item:hover,
+.nav-item-signout:hover {
+  transform: translateX(3px) !important;
+  background: rgba(245, 184, 92, 0.09) !important;
+  color: #fff7ed !important;
+}
+
+.nav-item.active,
+.bottom-nav-item.active,
+a.active {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.20), rgba(225, 29, 72, 0.10)) !important;
+  border: 1px solid rgba(245, 184, 92, 0.24) !important;
+  color: #fff7ed !important;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+}
+
+.glass-header,
+.app-header,
+.top-header,
+.header {
+  background: rgba(8, 5, 4, 0.74) !important;
+  border-bottom: 1px solid rgba(245, 184, 92, 0.14) !important;
+  backdrop-filter: blur(22px) saturate(130%) !important;
+  box-shadow: 0 18px 54px rgba(0, 0, 0, 0.28) !important;
+}
+
+.stat-pill,
+.lang-topbar-btn,
+.header-pill,
+.topbar-chip,
+.version-chip {
+  background: rgba(255, 247, 237, 0.055) !important;
+  border: 1px solid rgba(245, 184, 92, 0.16) !important;
+  color: #ffe8c2 !important;
+  border-radius: 999px !important;
+  clip-path: none !important;
+}
+
+.section-box,
+.control-bar,
+.bento-card,
+.filter-sidebar,
+.table-wrapper,
+.glass-panel,
+.quality-card,
+.episode-card,
+.folder-card,
+.detail-card,
+.settings-card,
+.settings-section,
+.fshare-card,
+.identity-card,
+.server-fshare-panel,
+.modal-panel,
+.modal-card,
+.preview-card,
+.fshare-login-card,
+.confirm-modal {
+  background:
+    linear-gradient(180deg, rgba(29, 18, 13, 0.84), rgba(11, 7, 6, 0.76)) !important;
+  border: 1px solid var(--cinema-line) !important;
+  border-radius: 28px !important;
+  box-shadow: var(--cinema-shadow), var(--cinema-inner) !important;
+  backdrop-filter: blur(18px) saturate(135%) !important;
+}
+
+.server-fshare-panel {
+  position: relative;
+  overflow: hidden;
+  padding: clamp(1rem, 1.4vw, 1.4rem) !important;
+  background:
+    linear-gradient(115deg, rgba(7, 4, 4, 0.72), rgba(35, 19, 12, 0.82)),
+    radial-gradient(circle at 20% 0%, rgba(245, 158, 11, 0.20), transparent 30%),
+    radial-gradient(circle at 95% 30%, rgba(225, 29, 72, 0.12), transparent 24%) !important;
+}
+
+.server-fshare-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.045), transparent),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.028) 0 1px, transparent 1px 22px);
+  opacity: 0.46;
+  mask-image: linear-gradient(90deg, transparent, black 20%, black 80%, transparent);
+}
+
+.server-fshare-panel .panel-hero {
+  min-height: 132px;
+  align-items: stretch !important;
+}
+
+.server-fshare-panel .eyebrow {
+  color: var(--cinema-gold) !important;
+  letter-spacing: 0.22em !important;
+}
+
+.server-fshare-panel h2 {
+  max-width: 780px;
+  color: #fff7ed !important;
+  font-size: clamp(1.75rem, 3.4vw, 3.8rem) !important;
+  line-height: 0.94 !important;
+  letter-spacing: -0.07em !important;
+  text-shadow: 0 16px 42px rgba(0, 0, 0, 0.46) !important;
+}
+
+.server-fshare-panel .hero-copy p {
+  max-width: 680px;
+  color: #d9c7b6 !important;
+  font-size: 0.98rem !important;
+}
+
+.account-pill {
+  background: rgba(5, 4, 4, 0.68) !important;
+  border: 1px solid rgba(245, 184, 92, 0.20) !important;
+  border-radius: 22px !important;
+}
+
+.account-pill.connected .material-icons,
+.account-pill .material-icons,
+.file-icon,
+.trigger-left .material-icons,
+.folder-section-header .material-icons {
+  color: var(--cinema-gold) !important;
+}
+
+.link-console,
+.confirm-strip,
+.preview-head {
+  background: rgba(5, 4, 4, 0.42) !important;
+  border: 1px solid rgba(245, 184, 92, 0.12) !important;
+  border-radius: 22px !important;
+  padding: 0.75rem !important;
+}
+
+.link-input-wrap input,
+.input-row,
+input,
+select,
+textarea,
+.search-input,
+.sort-select,
+.dl-path-input,
+.status-dropdown-trigger,
+.source-kind {
+  background: rgba(4, 3, 3, 0.72) !important;
+  border: 1px solid rgba(255, 214, 164, 0.16) !important;
+  color: #fff8ee !important;
+  border-radius: 18px !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035) !important;
+}
+
+input:focus,
+select:focus,
+textarea:focus,
+.input-row:focus-within {
+  border-color: rgba(245, 184, 92, 0.46) !important;
+  box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.10), inset 0 1px 0 rgba(255, 255, 255, 0.045) !important;
+}
+
+.primary-btn,
+.btn-primary,
+.fhub-btn--primary,
+.smart-grab-btn,
+.tv-get-btn,
+.get-btn,
+.smart-search-btn,
+.add-library-btn,
+.action-button,
+.primary-action,
+.login-btn,
+.btn-secondary,
+.btn-tiny.btn-success {
+  background: linear-gradient(135deg, #f5b85c 0%, #c2410c 58%, #7f1d1d 100%) !important;
+  border: 1px solid rgba(255, 214, 164, 0.36) !important;
+  color: #160b05 !important;
+  border-radius: 999px !important;
+  box-shadow: 0 18px 44px rgba(194, 65, 12, 0.26), inset 0 1px 0 rgba(255,255,255,0.26) !important;
+  font-weight: 900 !important;
+}
+
+.primary-btn:hover,
+.btn-primary:hover,
+.fhub-btn--primary:hover,
+.smart-grab-btn:hover,
+.tv-get-btn:hover,
+.get-btn:hover,
+.smart-search-btn:hover,
+.add-library-btn:hover,
+.action-button:hover,
+.primary-action:hover,
+.login-btn:hover {
+  transform: translateY(-2px) !important;
+  filter: brightness(1.08) saturate(1.08) !important;
+}
+
+.secondary-btn,
+.preview-actions button,
+.btn-tiny,
+.action-btn {
+  background: rgba(255, 247, 237, 0.065) !important;
+  border: 1px solid rgba(255, 214, 164, 0.16) !important;
+  color: #ffe8c2 !important;
+  border-radius: 999px !important;
+}
+
+.data-table thead th {
+  background: rgba(8, 5, 4, 0.96) !important;
+  color: #ffe8c2 !important;
+  border-color: rgba(245, 184, 92, 0.12) !important;
+}
+
+.data-table tbody tr:hover,
+.file-row:hover,
+.tv-file-row:hover,
+.episode-trigger:hover,
+.card-trigger:hover {
+  background: rgba(245, 184, 92, 0.075) !important;
+}
+
+.progress-fill,
+.download-progress-fill,
+.score-bar,
+.tv-score-bar {
+  background: linear-gradient(90deg, #f97316 0%, #f5b85c 55%, #fff3d0 100%) !important;
+  box-shadow: 0 0 22px rgba(245, 158, 11, 0.24) !important;
+}
+
+.progress-track,
+.download-progress-bar,
+.score-track,
+.tv-score-track {
+  background: rgba(255, 214, 164, 0.12) !important;
+}
+
+.media-card-v3 .card-inner,
+.media-card .card-inner,
+.poster-container,
+.detail-poster,
+.episode-thumb,
+.folder-icon {
+  border-radius: 22px !important;
+  border-color: rgba(255, 214, 164, 0.14) !important;
+}
+
+.media-card-v3 .card-overlay,
+.media-card .card-overlay,
+.hero-overlay,
+.banner-overlay {
+  background:
+    linear-gradient(180deg, transparent 18%, rgba(8, 5, 4, 0.28) 48%, rgba(8, 5, 4, 0.94) 100%) !important;
+}
+
+.badge,
+.badge-pill,
+.status-pill,
+.tv-badge,
+.downloaded-badge {
+  background: rgba(245, 184, 92, 0.12) !important;
+  border: 1px solid rgba(245, 184, 92, 0.20) !important;
+  color: #ffe8c2 !important;
+  border-radius: 999px !important;
+  clip-path: none !important;
+}
+
+/* Trailer-like intro polish */
+.intro-overlay {
+  background: #030202 !important;
+}
+
+.intro-overlay::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 50% 44%, transparent 0 25%, rgba(0, 0, 0, 0.22) 48%, rgba(0, 0, 0, 0.86) 100%),
+    linear-gradient(180deg, rgba(255,255,255,0.05) 0 1px, transparent 1px 5px);
+  mix-blend-mode: screen;
+  opacity: 0.42;
+}
+
+.intro-overlay::after {
+  content: "";
+  position: absolute;
+  inset: -12%;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    conic-gradient(from 90deg at 50% 50%, transparent 0deg, rgba(245, 184, 92, 0.16) 28deg, transparent 56deg, transparent 180deg, rgba(225, 29, 72, 0.08) 210deg, transparent 250deg),
+    radial-gradient(circle at 50% 46%, rgba(245, 184, 92, 0.18), transparent 30%);
+  filter: blur(28px);
+  animation: cinema-projector 7s ease-in-out infinite alternate;
+}
+
+.bg-void {
+  background-image:
+    radial-gradient(circle, rgba(245, 184, 92, 0.42) 1px, transparent 1.3px),
+    linear-gradient(90deg, transparent 0 18px, rgba(255, 255, 255, 0.035) 18px 20px, transparent 20px 38px) !important;
+  background-size: 13px 13px, 38px 100% !important;
+  opacity: 0.18 !important;
+  mask-image: radial-gradient(circle at 50% 45%, black 0%, rgba(0, 0, 0, 0.36) 24%, transparent 68%) !important;
+}
+
+.glow-orb {
+  background: radial-gradient(circle, rgba(245, 184, 92, 0.40) 0%, rgba(225, 29, 72, 0.18) 35%, transparent 70%) !important;
+  filter: blur(62px) !important;
+}
+
+.ring {
+  border-color: rgba(245, 184, 92, 0.52) !important;
+  box-shadow: 0 0 38px rgba(245, 158, 11, 0.24), inset 0 0 26px rgba(245, 158, 11, 0.08) !important;
+}
+
+.streak-line,
+.scan-line {
+  background: linear-gradient(90deg, transparent, rgba(245, 184, 92, 0.32), #fff4d6, rgba(245, 184, 92, 0.32), transparent) !important;
+  box-shadow: 0 0 24px rgba(245, 184, 92, 0.42), 0 0 72px rgba(194, 65, 12, 0.22) !important;
+}
+
+.hero-logo {
+  filter: drop-shadow(0 0 26px rgba(245, 184, 92, 0.42)) drop-shadow(0 30px 80px rgba(0,0,0,0.55)) !important;
+}
+
+.title-wrap.hidden-title {
+  display: flex !important;
+  opacity: 1;
+  top: calc(50% + min(24vmin, 178px)) !important;
+}
+
+.title-main::after {
+  content: "CINEMA DOWNLOAD HUB";
+  color: #fff7ed;
+  font-size: clamp(0.8rem, 1.2vw, 1rem);
+  font-weight: 900;
+  letter-spacing: 0.34em;
+  text-shadow: 0 0 30px rgba(245, 184, 92, 0.42);
+}
+
+.title-sub {
+  color: #f7c983 !important;
+  letter-spacing: 0.28em !important;
+}
+
+@keyframes cinema-projector {
+  0% { transform: translate3d(-1.5%, -1%, 0) rotate(-2deg) scale(1); opacity: 0.72; }
+  100% { transform: translate3d(1.5%, 1%, 0) rotate(2deg) scale(1.05); opacity: 1; }
+}
+
+/* PHASE 2: Full movie-hub polish inspired by the approved mockup */
+.glass-sidebar {
+  width: 240px !important;
+  padding-top: 0 !important;
+}
+
+.sidebar-brand {
+  min-height: 90px !important;
+  padding: 1.4rem 1rem 1rem !important;
+}
+
+.logo-container:not(.collapsed) {
+  width: 160px !important;
+  height: 58px !important;
+}
+
+.brand-logo-img.full {
+  width: 132px !important;
+  max-height: 44px !important;
+}
+
+.nav-links {
+  gap: 0.42rem !important;
+  padding: 0.5rem 0.9rem !important;
+}
+
+.nav-item {
+  min-height: 48px !important;
+  padding: 0.72rem 0.9rem !important;
+  color: rgba(255, 248, 238, 0.72) !important;
+}
+
+.nav-icon {
+  color: rgba(255, 232, 194, 0.92) !important;
+}
+
+.sidebar-footer {
+  padding: 0.9rem !important;
+}
+
+.main-viewport {
+  min-height: 100vh !important;
+  background:
+    radial-gradient(circle at 70% 2%, rgba(245, 158, 11, 0.10), transparent 24%),
+    radial-gradient(circle at 25% 90%, rgba(194, 65, 12, 0.09), transparent 22%) !important;
+}
+
+.glass-header {
+  margin: 0 !important;
+  height: 72px !important;
+  padding: 0 1.35rem !important;
+}
+
+.header-left,
+.header-right,
+.mini-hud {
+  min-height: 72px !important;
+}
+
+#header-dynamic-content h1 {
+  color: #fff7ed !important;
+  font-size: 0.82rem !important;
+}
+
+.view-container {
+  padding: 18px !important;
+}
+
+.downloads-container.dashboard-main,
+.discover-page,
+.settings-page {
+  padding: 0 !important;
+  display: grid !important;
+  gap: 1rem !important;
+}
+
+.server-fshare-panel,
+.section-box,
+.table-wrapper,
+.control-bar,
+.bento-card,
+.settings-section,
+.glass-panel,
+.detail-card,
+.smart-results-panel,
+.identity-card,
+.fshare-card {
+  transform: translateZ(0);
+  transition: border-color 0.22s ease, box-shadow 0.22s ease, transform 0.22s ease, background 0.22s ease !important;
+}
+
+.server-fshare-panel:hover,
+.section-box:hover,
+.bento-card:hover,
+.settings-section:hover,
+.glass-panel:hover,
+.detail-card:hover,
+.smart-results-panel:hover,
+.identity-card:hover,
+.fshare-card:hover {
+  border-color: rgba(245, 184, 92, 0.28) !important;
+  box-shadow: 0 32px 92px rgba(0, 0, 0, 0.46), 0 0 0 1px rgba(245, 184, 92, 0.055), var(--cinema-inner) !important;
+}
+
+.server-fshare-panel .panel-hero::after {
+  content: "4K REMUX • BLURAY • SERIES • NAS";
+  position: absolute;
+  right: 1.25rem;
+  bottom: 1.05rem;
+  color: rgba(255, 232, 194, 0.22);
+  font-size: clamp(1.5rem, 4vw, 4.6rem);
+  font-weight: 950;
+  letter-spacing: -0.09em;
+  line-height: 0.8;
+  pointer-events: none;
+}
+
+.link-console {
+  position: relative;
+  z-index: 1;
+  gap: 0.85rem !important;
+}
+
+.link-input-wrap {
+  min-width: 0 !important;
+}
+
+.link-input-wrap input {
+  min-height: 54px !important;
+  font-size: 0.95rem !important;
+}
+
+.file-list {
+  display: grid !important;
+  gap: 0.45rem !important;
+}
+
+.file-row {
+  min-height: 74px !important;
+  border: 1px solid rgba(255, 214, 164, 0.08) !important;
+  border-radius: 18px !important;
+  background: rgba(255, 247, 237, 0.035) !important;
+}
+
+.file-main strong {
+  font-size: 0.92rem !important;
+  color: #fff8ee !important;
+}
+
+.file-main small {
+  color: #c7b5a2 !important;
+}
+
+.toolbar {
+  gap: 0.85rem !important;
+  align-items: center !important;
+}
+
+.search-bar-prominent {
+  min-height: 54px !important;
+  border-radius: 999px !important;
+  background: rgba(4, 3, 3, 0.62) !important;
+  border: 1px solid rgba(255, 214, 164, 0.14) !important;
+}
+
+.search-bar-prominent input {
+  min-height: 50px !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+
+.toolbar-actions {
+  gap: 0.55rem !important;
+}
+
+.btn-tiny {
+  min-height: 42px !important;
+  padding-inline: 0.85rem !important;
+  font-weight: 850 !important;
+}
+
+.status-dropdown-menu,
+.context-menu,
+.batch-context-menu {
+  background: rgba(8, 5, 4, 0.96) !important;
+  border: 1px solid rgba(255, 214, 164, 0.16) !important;
+  border-radius: 18px !important;
+  box-shadow: 0 26px 70px rgba(0, 0, 0, 0.52) !important;
+  backdrop-filter: blur(18px) saturate(130%) !important;
+}
+
+.data-table {
+  border-collapse: separate !important;
+  border-spacing: 0 8px !important;
+}
+
+.data-table thead th {
+  height: 46px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.08em !important;
+  font-size: 0.68rem !important;
+}
+
+.data-table tbody tr {
+  background: rgba(255, 247, 237, 0.035) !important;
+  outline: 1px solid rgba(255, 214, 164, 0.07) !important;
+  border-radius: 18px !important;
+  overflow: hidden !important;
+}
+
+.data-table tbody td:first-child {
+  border-radius: 18px 0 0 18px !important;
+}
+
+.data-table tbody td:last-child {
+  border-radius: 0 18px 18px 0 !important;
+}
+
+.download-card,
+.mobile-download-card,
+.batch-card,
+.mobile-batch-card {
+  background: linear-gradient(180deg, rgba(26, 15, 11, 0.86), rgba(7, 5, 4, 0.78)) !important;
+  border: 1px solid rgba(255, 214, 164, 0.12) !important;
+  border-radius: 22px !important;
+  box-shadow: 0 18px 54px rgba(0, 0, 0, 0.36) !important;
+}
+
+.mobile-download-card:hover,
+.mobile-batch-card:hover,
+.download-card:hover,
+.batch-card:hover {
+  transform: translateY(-2px) !important;
+  border-color: rgba(245, 184, 92, 0.26) !important;
+}
+
+.media-card,
+.media-card-v3,
+.poster-card,
+.search-result-card {
+  border-radius: 20px !important;
+  overflow: hidden !important;
+}
+
+.media-card-v3 .card-inner,
+.media-card .card-inner,
+.poster-card,
+.search-result-card {
+  background: linear-gradient(180deg, rgba(25, 14, 10, 0.86), rgba(7, 5, 4, 0.9)) !important;
+  border: 1px solid rgba(255, 214, 164, 0.13) !important;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.40) !important;
+}
+
+.media-card-v3:hover .card-inner,
+.media-card:hover .card-inner,
+.poster-card:hover,
+.search-result-card:hover {
+  transform: translateY(-4px) scale(1.012) !important;
+  border-color: rgba(245, 184, 92, 0.34) !important;
+  box-shadow: 0 28px 78px rgba(0, 0, 0, 0.52), 0 0 34px rgba(245, 158, 11, 0.12) !important;
+}
+
+.card-year,
+.detail-btn,
+.quality-label,
+.score-text,
+.tv-score-value,
+.progress-text {
+  color: #ffe8c2 !important;
+}
+
+.detail-hero,
+.collection-hero,
+.discover-hero,
+.hero-banner,
+.page-hero {
+  min-height: 260px !important;
+  border-radius: 30px !important;
+  background-color: #080504 !important;
+  border: 1px solid rgba(255, 214, 164, 0.14) !important;
+  box-shadow: 0 34px 90px rgba(0, 0, 0, 0.48) !important;
+}
+
+.detail-hero::after,
+.collection-hero::after,
+.discover-hero::after,
+.hero-banner::after,
+.page-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(8, 5, 4, 0.84) 0%, rgba(8, 5, 4, 0.32) 45%, rgba(8, 5, 4, 0.78) 100%),
+    linear-gradient(180deg, transparent 0%, rgba(8, 5, 4, 0.90) 100%);
+}
+
+.detail-title,
+.collection-title,
+.page-title,
+.hero-title,
+h1,
+h2,
+h3 {
+  color: #fff8ee !important;
+  font-family: Inter, system-ui, sans-serif !important;
+  letter-spacing: -0.055em !important;
+}
+
+.section-title,
+.bento-head h3,
+.preview-head h3,
+.login-copy strong,
+.panel-title,
+.setting-title {
+  color: #ffe8c2 !important;
+}
+
+.detail-tagline,
+.detail-meta,
+.section-subtitle,
+.folder-meta,
+.file-meta,
+.ep-meta-row,
+.stat-label,
+p,
+small {
+  color: #c7b5a2 !important;
+}
+
+.discover-grid,
+.widget-grid,
+.media-grid,
+.results-grid {
+  gap: 1rem !important;
+}
+
+.filter-sidebar,
+.control-bar {
+  position: sticky !important;
+  top: 86px !important;
+  z-index: 8 !important;
+}
+
+.source-toggle,
+.toggle-btn,
+.filter-toggle-btn,
+.category-chip,
+.genre-chip,
+.tab-btn {
+  background: rgba(255, 247, 237, 0.05) !important;
+  border: 1px solid rgba(255, 214, 164, 0.13) !important;
+  color: #d9c7b6 !important;
+  border-radius: 999px !important;
+}
+
+.source-toggle.on,
+.toggle-btn.active,
+.filter-toggle-btn.active,
+.category-chip.active,
+.genre-chip.active,
+.tab-btn.active {
+  background: linear-gradient(135deg, rgba(245, 184, 92, 0.25), rgba(194, 65, 12, 0.16)) !important;
+  color: #fff7ed !important;
+  border-color: rgba(245, 184, 92, 0.34) !important;
+}
+
+.settings-page .settings-section,
+.settings-card,
+.identity-card,
+.fshare-card {
+  min-height: 120px !important;
+}
+
+.modal-backdrop,
+.confirm-backdrop {
+  background: rgba(0, 0, 0, 0.76) !important;
+  backdrop-filter: blur(14px) saturate(120%) !important;
+}
+
+.modal-card,
+.confirm-modal,
+:where(dialog) {
+  border-radius: 30px !important;
+  background: linear-gradient(180deg, rgba(24, 15, 12, 0.98), rgba(7, 5, 4, 0.98)) !important;
+}
+
+.toasts,
+.toast {
+  z-index: 12000 !important;
+}
+
+.toast {
+  background: rgba(8, 5, 4, 0.95) !important;
+  border: 1px solid rgba(245, 184, 92, 0.18) !important;
+  border-radius: 18px !important;
+  color: #fff8ee !important;
+  box-shadow: 0 22px 64px rgba(0, 0, 0, 0.46) !important;
+}
+
+.bottom-nav {
+  border-radius: 24px 24px 0 0 !important;
+  box-shadow: 0 -20px 60px rgba(0, 0, 0, 0.48) !important;
+}
+
+.bottom-nav-item {
+  gap: 0.2rem !important;
+}
+
+@keyframes cinema-rise {
+  from { opacity: 0; transform: translateY(14px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.server-fshare-panel,
+.section-box,
+.table-wrapper,
+.bento-card,
+.settings-section,
+.glass-panel,
+.detail-card {
+  animation: cinema-rise 0.42s ease both;
+}
+
+/* PHASE 3: FHub-owned brand surface */
+.brand-logo-img,
+.hero-logo,
+.chroma-clone {
+  object-fit: contain !important;
+}
+
+.brand-logo-img.full {
+  content: url('/images/fhub-logo-wide.png') !important;
+}
+
+.hero-logo,
+.chroma-clone {
+  content: url('/images/fhub-logo-wide.png') !important;
+}
+
+.logo-container.collapsed .brand-logo-img,
+.brand-logo-img:not(.full) {
+  content: url('/images/fhub-logo-wide.png') !important;
+  border-radius: 14px !important;
+  object-fit: contain !important;
+  background: radial-gradient(circle at 50% 45%, rgba(245, 184, 92, 0.14), transparent 62%) !important;
+}
+
+.brand-logo-img.full,
+.hero-logo {
+  filter: drop-shadow(0 0 22px rgba(245, 184, 92, 0.42)) drop-shadow(0 24px 64px rgba(0,0,0,0.54)) !important;
+}
+
+.logo-container::after,
+.logo-wrap::after {
+  content: "";
+  position: absolute;
+  inset: -16%;
+  pointer-events: none;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(245, 184, 92, 0.18), transparent 62%);
+  filter: blur(18px);
+  z-index: -1;
+}
+
+.title-main::after {
+  content: "FHUB CINEMA" !important;
+}
+
+.title-sub {
+  font-size: 0.72rem !important;
+  text-transform: uppercase !important;
+}
+
+.login-page,
+.setup-page,
+.auth-page {
+  background:
+    radial-gradient(circle at 20% 10%, rgba(245, 184, 92, 0.16), transparent 28%),
+    radial-gradient(circle at 80% 20%, rgba(225, 29, 72, 0.10), transparent 24%),
+    linear-gradient(180deg, #050404 0%, #120a08 100%) !important;
+}
+
+.login-card,
+.setup-card,
+.auth-card,
+.auth-panel,
+.setup-panel {
+  background: linear-gradient(180deg, rgba(29, 18, 13, 0.92), rgba(7, 5, 4, 0.88)) !important;
+  border: 1px solid rgba(245, 184, 92, 0.18) !important;
+  border-radius: 30px !important;
+  box-shadow: 0 30px 90px rgba(0,0,0,0.48), inset 0 1px 0 rgba(255,255,255,0.055) !important;
+}
+
+.login-card::before,
+.setup-card::before,
+.auth-card::before {
+  content: "FHUB";
+  display: block;
+  margin-bottom: 0.85rem;
+  color: #f5b85c;
+  font-size: 1.15rem;
+  font-weight: 950;
+  letter-spacing: 0.24em;
+}
+
+@media (min-width: 1280px) {
+  .view-container {
+    padding: 20px 22px !important;
+  }
+
+  .downloads-container.dashboard-main {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .server-fshare-panel {
+    min-height: 250px !important;
+  }
+}
+
+@media (max-width: 1024px) {
+  .glass-header {
+    height: 62px !important;
+    padding-inline: 0.9rem !important;
+  }
+
+  .view-container {
+    padding: 12px !important;
+  }
+
+  .glass-sidebar {
+    width: 280px !important;
+  }
+
+  .filter-sidebar,
+  .control-bar {
+    position: static !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .downloads-container,
+  .discover-page,
+  .settings-page {
+    padding: 10px !important;
+  }
+
+  .server-fshare-panel h2 {
+    font-size: clamp(1.55rem, 10vw, 2.6rem) !important;
+    line-height: 1 !important;
+  }
+
+  .server-fshare-panel .panel-hero,
+  .link-console,
+  .confirm-strip,
+  .preview-head,
+  .toolbar {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+  }
+
+  .server-fshare-panel .panel-hero::after {
+    right: 0.9rem;
+    bottom: 0.55rem;
+    font-size: 2rem;
+  }
+
+  .toolbar-actions,
+  .preview-actions {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    width: 100% !important;
+  }
+
+  .toolbar-actions button,
+  .preview-actions button,
+  .primary-btn,
+  .secondary-btn {
+    width: 100% !important;
+  }
+
+  .bottom-nav {
+    background: rgba(8, 5, 4, 0.84) !important;
+    border-top: 1px solid rgba(245, 184, 92, 0.16) !important;
+    backdrop-filter: blur(22px) saturate(130%) !important;
+  }
+
+  .data-table {
+    font-size: 0.82rem !important;
+  }
+
+  .title-main::after {
+    font-size: 0.68rem;
+    letter-spacing: 0.18em;
+  }
+}

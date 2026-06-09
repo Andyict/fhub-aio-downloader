@@ -1,0 +1,43 @@
+# Production Dockerfile using pre-built binaries
+FROM debian:bookworm-slim
+
+# Install runtime dependencies and curl for healthcheck
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    libssl3 \
+    curl \
+    aria2 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create app user
+RUN useradd -m -u 1000 fhub
+
+WORKDIR /app
+
+# Copy pre-built backend binary
+COPY backend/target/release/fhub /app/fhub
+
+# Copy pre-built frontend static files
+COPY frontend/build /app/static
+
+# Create appData directory structure
+RUN mkdir -p /appData/config /appData/data /appData/downloads /appData/logs && \
+    chown -R fhub:fhub /appData /app && \
+    chmod +x /app/fhub
+
+# Switch to app user
+USER fhub
+
+# Set environment variables
+ENV FHUB_APPDATA_DIR=/appData
+ENV RUST_LOG=fhub=info,tower_http=info
+
+# Expose port
+EXPOSE 8484
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+    CMD curl -sf http://localhost:8484/api/health || exit 1
+
+# Run the application
+CMD ["/app/fhub"]

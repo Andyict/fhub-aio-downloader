@@ -1,0 +1,22 @@
+[server]
+host = "0.0.0.0"
+port = 8585
+
+[downloads]
+directory = "/data/downloads"
+max_concurrent = 3
+segments_per_download = 4
+
+[fshare]
+email = ""
+password = ""
+prefer_api2 = true
+
+[indexer]
+enabled = true
+api_key = "fhub-default-key"
+
+[external]
+tmdb_api_key = "your-tmdb-api-key"
+tmdb_cache_ttl_secs = 3600
+fshare_cache_ttl_secs = 300

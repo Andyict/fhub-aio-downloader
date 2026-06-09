@@ -1,0 +1,14 @@
+{
+  "name": "FShare Hub",
+  "short_name": "FShare Hub",
+  "description": "FShare download hub for NAS movie workflows.",
+  "icons": [
+    { "src": "/fhub-tab-logo.png?v=20260605b", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "theme_color": "#050404",
+  "background_color": "#050404",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "start_url": "/"
+}

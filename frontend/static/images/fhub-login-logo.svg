@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 170" role="img" aria-label="FHub FShare and Torrent tốc độ cao Movie Hub">
+  <defs>
+    <linearGradient id="f" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#ffd36f"/>
+      <stop offset="0.5" stop-color="#ff8a2d"/>
+      <stop offset="1" stop-color="#f15b22"/>
+    </linearGradient>
+    <linearGradient id="hub" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#2d7dd8"/>
+      <stop offset="0.55" stop-color="#114d99"/>
+      <stop offset="1" stop-color="#0a2f73"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-35%" width="140%" height="170%">
+      <feDropShadow dx="0" dy="7" stdDeviation="7" flood-color="#000" flood-opacity="0.55"/>
+      <feDropShadow dx="0" dy="0" stdDeviation="3" flood-color="#f4b544" flood-opacity="0.18"/>
+    </filter>
+  </defs>
+  <rect width="640" height="170" fill="none"/>
+  <g filter="url(#glow)">
+    <text x="320" y="76" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="100" font-weight="900" letter-spacing="-7">
+      <tspan fill="url(#f)">F</tspan><tspan fill="url(#hub)">Hub</tspan>
+    </text>
+  </g>
+  <text x="320" y="112" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="23" font-weight="900" letter-spacing="0.4" fill="#a8abb3">FSHARE &amp; TORRENT TỐC ĐỘ CAO</text>
+  <text x="320" y="154" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="26" font-weight="800" letter-spacing="18" fill="#d8d3c9">MOVIE HUB</text>
+</svg>

@@ -1,0 +1,279 @@
+/* FHub Family Cinema OS: local-first family/NAS movie hub layer.
+   This file is imported globally, so selectors must be plain CSS selectors. */
+
+:root {
+  --family-bg: #06110d;
+  --family-panel: rgba(13, 31, 23, 0.88);
+  --family-line: rgba(94, 234, 181, 0.18);
+  --family-line-strong: rgba(94, 234, 181, 0.38);
+  --family-accent: #5eeab5;
+  --family-accent-2: #a3f7d6;
+  --family-blue: #66c2ff;
+  --family-gold: #f4b544;
+  --family-text: #eefff8;
+  --family-muted: #94b8aa;
+  --family-shadow: 0 24px 80px rgba(0, 0, 0, 0.46);
+}
+
+html,
+body {
+  background: var(--family-bg) !important;
+  color: var(--family-text) !important;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -3;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 16% -8%, rgba(94, 234, 181, 0.19), transparent 30%),
+    radial-gradient(circle at 92% 4%, rgba(102, 194, 255, 0.12), transparent 28%),
+    linear-gradient(180deg, #06110d 0%, #071510 52%, #050806 100%);
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  opacity: 0.15;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  background-size: 34px 34px;
+}
+
+.cinema-shell {
+  background:
+    radial-gradient(circle at 18% -10%, rgba(94, 234, 181, 0.2), transparent 32%),
+    linear-gradient(180deg, #06110d, #071510 48%, #050806) !important;
+}
+
+.cinema-sidebar,
+.cinema-topbar,
+.cinema-bottom-nav {
+  background: linear-gradient(180deg, rgba(13, 31, 23, 0.88), rgba(5, 12, 9, 0.88)) !important;
+  border-color: var(--family-line) !important;
+  box-shadow: var(--family-shadow) !important;
+}
+
+.cinema-brand img,
+.mobile-brand img {
+  filter: drop-shadow(0 0 22px rgba(94, 234, 181, 0.3)) !important;
+}
+
+.cinema-brand span,
+.mobile-brand span {
+  color: rgba(163, 247, 214, 0.7) !important;
+}
+
+.cinema-nav a,
+.cinema-bottom-nav a {
+  color: rgba(238, 255, 248, 0.66) !important;
+  transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease !important;
+}
+
+.cinema-nav a:hover,
+.cinema-nav a.active,
+.cinema-bottom-nav a.active {
+  color: var(--family-accent-2) !important;
+  background: linear-gradient(135deg, rgba(94, 234, 181, 0.12), rgba(102, 194, 255, 0.08)) !important;
+  border-color: var(--family-line-strong) !important;
+}
+
+.cinema-content {
+  max-width: 1560px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.status-pill,
+.account-pill {
+  color: var(--family-accent-2) !important;
+  background: rgba(94, 234, 181, 0.1) !important;
+  border-color: var(--family-line) !important;
+}
+
+.status-pill .material-icons {
+  color: var(--family-accent) !important;
+  animation: familyPulse 1.7s ease-in-out infinite;
+}
+
+.family-glass,
+.family-profile-card,
+.family-queue-card,
+.family-lan-card,
+.family-feature-card,
+.family-panel {
+  background: linear-gradient(180deg, rgba(13, 31, 23, 0.88), rgba(5, 12, 9, 0.82));
+  border: 1px solid var(--family-line);
+  box-shadow: var(--family-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.045);
+  backdrop-filter: blur(22px) saturate(150%);
+}
+
+.family-hero,
+.download-hero,
+.search-hero,
+.profile-hero {
+  border-color: var(--family-line-strong) !important;
+  box-shadow: 0 30px 110px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.04) !important;
+}
+
+.family-kicker,
+.eyebrow {
+  color: var(--family-accent) !important;
+}
+
+.family-primary,
+.primary,
+.submit,
+.link-panel button,
+.tabs .active,
+.genre-grid button.active {
+  background: linear-gradient(180deg, var(--family-accent-2), var(--family-accent)) !important;
+  border-color: rgba(163, 247, 214, 0.44) !important;
+  color: #04110c !important;
+  box-shadow: 0 18px 48px rgba(94, 234, 181, 0.18) !important;
+}
+
+button,
+a,
+.movie-card,
+.poster-card,
+.download-card,
+.family-profile-card {
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, filter 0.18s ease !important;
+}
+
+button:hover:not(:disabled),
+a:hover,
+.movie-card:hover,
+.poster-card:hover,
+.download-card:hover,
+.family-profile-card:hover {
+  transform: translateY(-2px) !important;
+  border-color: var(--family-line-strong) !important;
+  box-shadow: 0 28px 88px rgba(0, 0, 0, 0.48), 0 0 0 1px rgba(94, 234, 181, 0.1) !important;
+}
+
+.family-avatar {
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  color: #04110c;
+  font-weight: 950;
+  background: linear-gradient(180deg, var(--family-accent-2), var(--family-accent));
+  box-shadow: 0 0 28px rgba(94, 234, 181, 0.28);
+}
+
+.family-avatar.blue {
+  background: linear-gradient(180deg, #b9e4ff, var(--family-blue));
+}
+
+.family-avatar.gold {
+  background: linear-gradient(180deg, #ffe3a3, var(--family-gold));
+}
+
+.family-avatar.muted {
+  background: linear-gradient(180deg, #e7e7e7, #a9b2ad);
+}
+
+.family-online-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--family-accent);
+  box-shadow: 0 0 0 0 rgba(94, 234, 181, 0.45);
+  animation: familyPing 1.7s ease-out infinite;
+}
+
+.progress i,
+.family-progress > span {
+  background: linear-gradient(90deg, var(--family-accent), var(--family-blue), var(--family-accent-2)) !important;
+  background-size: 180% 100% !important;
+  animation: familyShimmer 2.4s linear infinite;
+}
+
+.poster,
+.movie-card,
+.poster-card {
+  overflow: hidden;
+}
+
+.poster::after,
+.movie-card::before,
+.poster-card::before {
+  content: "";
+  position: absolute;
+  inset: -70% -40%;
+  pointer-events: none;
+  background: linear-gradient(110deg, transparent 35%, rgba(255, 255, 255, 0.14), transparent 65%);
+  transform: translateX(-100%);
+  animation: familyShine 4.8s ease-in-out infinite;
+}
+
+.family-section-title {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.family-section-title h2 {
+  margin: 0.2rem 0 0;
+  color: var(--family-text);
+  letter-spacing: -0.05em;
+}
+
+@keyframes familyPulse {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 0 rgba(94, 234, 181, 0));
+  }
+  50% {
+    filter: drop-shadow(0 0 12px rgba(94, 234, 181, 0.75));
+  }
+}
+
+@keyframes familyPing {
+  0% {
+    box-shadow: 0 0 0 0 rgba(94, 234, 181, 0.45);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(94, 234, 181, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(94, 234, 181, 0);
+  }
+}
+
+@keyframes familyShimmer {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 180% 50%;
+  }
+}
+
+@keyframes familyShine {
+  0%,
+  55% {
+    transform: translateX(-100%);
+  }
+  85%,
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@media (max-width: 900px) {
+  .cinema-content {
+    padding: 1rem !important;
+  }
+}

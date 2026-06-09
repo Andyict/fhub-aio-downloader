@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  fhub:
+    # Build directly from the source checkout:
+    #   git clone https://github.com/Andyict/FHUB-AIO.git
+    #   cd FHUB-AIO
+    #   docker compose up -d --build
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: fhub:latest
+    container_name: fhub
+    restart: unless-stopped
+
+    ports:
+      # HOST_PORT:CONTAINER_PORT
+      # Open FHub at http://NAS_IP:8584
+      # If 8584 is already used, change only the left side, e.g. "8585:8484".
+      - "8584:8484"
+
+    volumes:
+      # Persistent app data: database, config, FShare accounts, settings.
+      # Named volume is easiest for Docker users. Back it up before reinstalling.
+      - fhub_appdata:/appData
+
+      # Downloads/media folder on the host NAS.
+      # IMPORTANT: change /volume1/Video to your real folder if needed.
+      # Examples:
+      #   Synology: /volume1/Video
+      #   QNAP:     /share/Multimedia
+      #   Linux:    /mnt/media
+      # Keep the container path /downloads unless FHUB_DOWNLOADS_DIR is changed too.
+      - /volume1/Video:/downloads
+
+    environment:
+      # Timezone used by logs/scheduler.
+      - TZ=Asia/Ho_Chi_Minh
+
+      # Internal container paths. Keep aligned with the volume mappings above.
+      - FHUB_APPDATA_DIR=/appData
+      - FHUB_DOWNLOADS_DIR=/downloads
+
+      # Public-safe defaults: stable on small/older NAS devices.
+      # Stronger NAS can tune these upward later in compose/env.
+      - FHUB_SEGMENTS_PER_DOWNLOAD=16
+      - FHUB_MAX_CONCURRENT=4
+
+      # Logging.
+      - RUST_LOG=fhub=info,tower_http=info
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8484/api/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  fhub_appdata:
