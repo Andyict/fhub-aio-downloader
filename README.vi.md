@@ -11,6 +11,8 @@ Cách này dùng image public đã build sẵn từ GHCR. Người dùng chỉ c
 ```bash
 git clone https://github.com/Andyict/fhub-aio-downloader.git
 cd fhub-aio-downloader
+mkdir -p /volume1/Video
+# Nếu thư mục lưu file của bạn không phải /volume1/Video, hãy sửa docker-compose.yml trước
 docker compose up -d
 ```
 
@@ -20,9 +22,9 @@ Mở FHub:
 http://IP_NAS:8584
 ```
 
-## File `docker-compose.yml` mẫu sạch
+Lần đầu mở FHub, bạn sẽ tạo tài khoản admin đầu tiên.
 
-Bản này dùng volume app data riêng `fhub_appdata_clean`. Nếu là lần đầu hoặc đã reset volume, FHub sẽ hiện màn tạo tài khoản admin đầu tiên.
+## File `docker-compose.yml` mẫu
 
 ```yaml
 version: '3.8'
@@ -37,12 +39,11 @@ services:
       - "8584:8484"
 
     volumes:
-      # Dữ liệu app sạch cho lần chạy đầu tiên.
-      # Reset bằng: docker compose down -v
-      - fhub_appdata_clean:/appData
+      - fhub_appdata:/appData
 
-      # Thư mục lưu file tải về trên NAS. Chỉ sửa bên trái dấu ":" nếu cần.
-      - /volume2/homes/vanthinh194/Phim:/downloads
+      # Video/file tải về sẽ được lưu ở đây.
+      # Chỉ đổi /volume1/Video thành thư mục trên NAS của bạn; giữ nguyên /downloads.
+      - /volume1/Video:/downloads
 
     environment:
       - TZ=Asia/Ho_Chi_Minh
@@ -52,43 +53,19 @@ services:
       - FHUB_MAX_CONCURRENT=4
       - RUST_LOG=fhub=info,tower_http=info
 
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8484/api/health"]
-      interval: 30s
-      timeout: 3s
-      retries: 3
-      start_period: 10s
-
 volumes:
-  fhub_appdata_clean:
+  fhub_appdata:
 ```
-
-## Reset để test mới tinh
-
-Nếu vào thẳng app và không thấy màn tạo admin đầu tiên, nghĩa là volume app data cũ vẫn còn. Reset bằng:
-
-```bash
-docker compose down -v
-docker compose up -d
-```
-
-Sau khi reset, mở lại:
-
-```text
-http://IP_NAS:8584
-```
-
-Lần đầu sẽ tạo tài khoản admin.
 
 ## Lưu ý đường dẫn tải về
 
-Dòng này là nơi lưu file tải từ FShare:
+Dòng này là nơi lưu video/file tải từ FShare:
 
 ```yaml
-- /volume2/homes/vanthinh194/Phim:/downloads
+- /volume1/Video:/downloads
 ```
 
-Nếu muốn đổi thư mục, chỉ sửa bên trái dấu `:`. Giữ nguyên `/downloads`.
+Nếu thư mục này chưa có thì nên tạo trước. Nếu muốn đổi thư mục, chỉ sửa `/volume1/Video` thành thư mục thật trên NAS. Giữ nguyên `/downloads`.
 
 ## Cập nhật
 

@@ -10,12 +10,11 @@ services:
       - "8584:8484"
 
     volumes:
-      # Clean app data volume for fresh first-run/admin setup.
-      # Reset with: docker compose down -v
-      - fhub_appdata_clean:/appData
+      - fhub_appdata:/appData
 
-      # Downloads/media folder on the NAS. Change only the left side if needed.
-      - /volume2/homes/vanthinh194/Phim:/downloads
+      # Video/file tải về sẽ được lưu ở đây.
+      # Chỉ đổi /volume1/Video thành thư mục trên NAS của bạn; giữ nguyên /downloads.
+      - /volume1/Video:/downloads
 
     environment:
       - TZ=Asia/Ho_Chi_Minh
@@ -25,12 +24,5 @@ services:
       - FHUB_MAX_CONCURRENT=4
       - RUST_LOG=fhub=info,tower_http=info
 
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8484/api/health"]
-      interval: 30s
-      timeout: 3s
-      retries: 3
-      start_period: 10s
-
 volumes:
-  fhub_appdata_clean:
+  fhub_appdata:
