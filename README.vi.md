@@ -169,6 +169,18 @@ Chạy:
 docker compose -f docker-compose.test.yml up -d
 ```
 
+Nếu đã chạy trước đó mà vào thẳng app không thấy màn tạo admin đầu tiên, nghĩa là còn dùng dữ liệu cũ. Hãy reset volume test:
+
+```bash
+docker compose -f docker-compose.test.yml down -v
+```
+
+rồi chạy lại:
+
+```bash
+docker compose -f docker-compose.test.yml up -d
+```
+
 ## Thiết lập lần đầu
 
 1. Mở `http://IP_NAS:8584`.

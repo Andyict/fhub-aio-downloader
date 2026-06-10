@@ -178,6 +178,18 @@ Run it with:
 docker compose -f docker-compose.test.yml up -d
 ```
 
+If you already ran FHub before and it opens straight into the app without the first admin setup, that means old app data is still being reused. Reset it first with:
+
+```bash
+docker compose -f docker-compose.test.yml down -v
+```
+
+Then start it again:
+
+```bash
+docker compose -f docker-compose.test.yml up -d
+```
+
 ## First-time setup
 
 1. Open `http://NAS_IP:8584`.
