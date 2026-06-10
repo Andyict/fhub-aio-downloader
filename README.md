@@ -13,11 +13,11 @@ FHub is a NAS-focused FShare download manager with a web dashboard, segmented do
 
 ## Quick install with Docker Compose
 
-This method builds the Docker image directly from this source checkout, so users do not need a prebuilt registry image.
+This method builds the Docker image directly from this source checkout, so users do not need a prebuilt registry image or GHCR access.
 
 ```bash
-git clone https://github.com/Andyict/FHUB-AIO.git
-cd FHUB-AIO
+git clone https://github.com/Andyict/fhub-aio-downloader.git
+cd fhub-aio-downloader
 mkdir -p ./appData
 mkdir -p /volume1/Video
 # Edit docker-compose.yml first if your download folder is not /volume1/Video
@@ -147,7 +147,7 @@ volumes:
 ## Updating
 
 ```bash
-cd FHUB-AIO
+cd fhub-aio-downloader
 git pull
 docker compose up -d --build
 ```
