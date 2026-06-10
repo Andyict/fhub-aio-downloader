@@ -1,5 +1,7 @@
 # FHub
 
+English | [Tiếng Việt](README.vi.md)
+
 FHub is a NAS-focused FShare download manager with a web dashboard, segmented downloads, FShare account support, and media-friendly download organization.
 
 ## Features
@@ -144,6 +146,7 @@ volumes:
 ```bash
 cd fhub-aio-downloader
 git pull
+docker compose pull
 docker compose up -d
 ```
 
