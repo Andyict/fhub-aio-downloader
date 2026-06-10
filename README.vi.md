@@ -31,7 +31,7 @@ version: '3.8'
 
 services:
   fhub:
-    image: ghcr.io/andyict/fhub-aio-downloader:latest
+    image: ghcr.io/andyict/fhub-aio:latest
     container_name: fhub
     restart: unless-stopped
 

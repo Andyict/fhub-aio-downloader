@@ -32,7 +32,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/andyict/fhub-aio-downloader
+          images: ghcr.io/andyict/fhub-aio
           tags: |
             type=raw,value=latest
             type=sha,prefix=
