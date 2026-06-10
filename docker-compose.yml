@@ -2,14 +2,7 @@ version: '3.8'
 
 services:
   fhub:
-    # Build directly from the source checkout:
-    #   git clone https://github.com/Andyict/fhub-aio-downloader.git
-    #   cd fhub-aio-downloader
-    #   docker compose up -d --build
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: fhub:latest
+    image: ghcr.io/andyict/fhub-aio-downloader:latest
     container_name: fhub
     restart: unless-stopped
 
