@@ -1,7 +1,7 @@
 use axum::{
     middleware,
     response::IntoResponse,
-    routing::get,
+    routing::{get, post},
     Router,
     Json,
 };
@@ -247,6 +247,7 @@ async fn main() {
     let admin_api = Router::new()
         .nest("/api/auth", api::auth::admin_router())
         .nest("/api/settings", api::settings::router())
+        .nest("/api/update", api::update::router())
         .layer(middleware::from_fn_with_state(Arc::clone(&state), api::auth::admin_required));
 
     let protected_api = Router::new()
@@ -277,6 +278,8 @@ async fn main() {
         .nest("/api/discovery", api::discovery::router())
         .merge(admin_api)
         .merge(protected_api)
+        .route("/api/downloads/preview-folder", post(api::downloads::preview_folder_download))
+        .route("/api/downloads/preview-link", post(api::downloads::preview_link_download))
         .layer(
             CorsLayer::new()
                 .allow_origin(Any)

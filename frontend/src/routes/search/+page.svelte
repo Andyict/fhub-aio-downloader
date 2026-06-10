@@ -63,7 +63,7 @@
             const val = searchInput.value.trim();
             if (val) {
               searchQuery = val;
-              handleSearch(val);
+              routeSearchValue(val);
             }
           }
         });
@@ -82,7 +82,7 @@
 
     if (q) {
       searchQuery = q;
-      handleSearch(q);
+      routeSearchValue(q);
     } else {
       fetchTrending();
     }
@@ -147,7 +147,58 @@
       return true;
     });
   }
-  function runHistorySearch(query: string) { searchQuery = query; const input = document.getElementById("spotlight-search") as HTMLInputElement | null; if (input) input.value = query; handleSearch(query); }
+  function routeSearchValue(value: string) {
+    const clean = value.trim();
+    if (!clean) return;
+    if (isFshareUrl(clean)) {
+      window.location.href = `/downloads?url=${encodeURIComponent(clean)}`;
+      return;
+    }
+    window.location.href = `/discover?q=${encodeURIComponent(clean)}`;
+  }
+
+  function runHistorySearch(query: string) { searchQuery = query; const input = document.getElementById("spotlight-search") as HTMLInputElement | null; if (input) input.value = query; routeSearchValue(query); }
+  function isFshareUrl(value?: string | null) {
+    return /https?:\/\/(www\.)?fshare\.vn\/(file|folder)\//i.test((value || "").trim());
+  }
+  function isFshareFolderUrl(value?: string | null) {
+    return /https?:\/\/(www\.)?fshare\.vn\/folder\//i.test((value || "").trim());
+  }
+  function fshareUrlForItem(item: any) {
+    const direct = item.url || item.link || item.original_url || item.resolved_url;
+    if (isFshareUrl(direct)) return direct;
+    const code = item.fcode || item.linkcode || item.id;
+    if (!code) return "";
+    return `https://www.fshare.vn/file/${code}`;
+  }
+  function mapPreviewItems(preview: any, sourceUrl: string) {
+    const folderName = preview?.folder_name || preview?.name || "FShare folder";
+    const items = Array.isArray(preview?.items) ? preview.items : [];
+    if (!items.length && !isFshareFolderUrl(sourceUrl)) {
+      return [{
+        id: preview?.folder_code || preview?.file_code || sourceUrl,
+        tmdb_id: undefined,
+        title: preview?.title || preview?.name || sourceUrl.split("/").pop() || "FShare file",
+        name: preview?.name || preview?.title || sourceUrl.split("/").pop() || "FShare file",
+        url: preview?.resolved_url || preview?.original_url || sourceUrl,
+        link: preview?.resolved_url || preview?.original_url || sourceUrl,
+        size: preview?.size || 0,
+        is_directory: false,
+        media_type: "movie",
+      }];
+    }
+    return items.map((item: any, index: number) => ({
+      ...item,
+      id: item.fcode || item.linkcode || item.id || item.url || `${sourceUrl}:${index}`,
+      tmdb_id: undefined,
+      title: item.title || item.name || folderName,
+      name: item.name || item.title || folderName,
+      url: item.url || item.link,
+      link: item.url || item.link,
+      parentFolder: folderName,
+      media_type: item.media_type || "movie",
+    }));
+  }
   function toggleBookmark(item: SearchItem) { const key = itemKey(item); if (isBookmarked(item)) { bookmarkedItems = bookmarkedItems.filter((saved) => itemKey(saved) !== key); toasts.success("Removed from FHUB saved assets"); } else { bookmarkedItems = [item, ...bookmarkedItems.filter((saved) => itemKey(saved) !== key)].slice(0, 100); toasts.success("Saved to FHUB bookmarks"); } persistBookmarks(); refreshVisibleResults(); }
   function clearSearchHistory() { searchHistory = []; persistHistory(); }
   function clearBookmarks() { bookmarkedItems = []; showAllBookmarks = false; persistBookmarks(); refreshVisibleResults(); }
@@ -175,18 +226,42 @@
 
   // Enhanced Search (Infinite Scroll)
   async function handleSearch(query: string) {
-    if (!query) return;
+    const trimmed = query.trim();
+    if (!trimmed) return;
 
-    addSearchHistory(query);
+    addSearchHistory(trimmed);
 
-    // Reset state
     visibleCount = BATCH_SIZE;
     hasSearched = true;
     showTrending = false;
     isLoading = true;
+    allResults = [];
+    visibleResults = [];
+    totalResults = 0;
 
     try {
-      const searchTerms = [query, ...aliasSearchQueries(query)];
+      if (isFshareUrl(trimmed)) {
+        toasts.info(isFshareFolderUrl(trimmed) ? "Đang đọc folder FShare..." : "Đang đọc link FShare...");
+        const response = await fetch(`${API_BASE}/downloads/preview-link`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ url: trimmed, recursive: false }),
+        });
+        const preview = response.ok ? await response.json() : { success: false, message: await response.text() };
+        if (!response.ok || preview?.success === false) {
+          throw new Error(preview?.message || "Không đọc được link FShare.");
+        }
+        allResults = sortBookmarkedFirst(mapResults(mapPreviewItems(preview, trimmed)));
+        totalResults = allResults.length;
+        visibleResults = allResults.slice(0, visibleCount);
+        if (totalResults) toasts.success(`Đã tìm thấy ${totalResults} file từ FShare`);
+        else toasts.error("Folder FShare không có file hiển thị.");
+        setupScrollObserver();
+        return;
+      }
+
+      const searchTerms = [trimmed, ...aliasSearchQueries(trimmed)];
       const data = await queryClient.fetch(`search:${searchTerms.join("|")}`, async () => {
         const payloads = await Promise.all(searchTerms.map(async (term) => {
           const res = await fetch(`${API_BASE}/search/enhanced?q=${encodeURIComponent(term)}&enrich=true&limit=100`);
@@ -202,13 +277,15 @@
       setupScrollObserver();
     } catch (err) {
       console.error("FHUB search error:", err);
-      toasts.error("FHUB source connection lost. Please try again.");
+      toasts.error(err instanceof Error ? err.message : "FHUB source connection lost. Please try again.");
       allResults = [];
       visibleResults = [];
+      totalResults = 0;
     } finally {
       isLoading = false;
     }
   }
+
 
   function loadMore() {
     if (loadingMore || visibleCount >= allResults.length) return;
@@ -271,7 +348,7 @@
       }
 
       return {
-        id: item.tmdb_id,
+        id: item.tmdb_id || item.id || item.fcode || item.url,
         title: displayTitle,
         posterPath: item.poster_path, // Prefer path for metadata image construction
         posterUrl: item.poster_url, // Fallback full URL
@@ -279,7 +356,9 @@
         releaseDate:
           item.release_date || item.first_air_date || item.year || "",
         mediaType: item.media_type || "movie",
-        fcode: item.id, // Source ID is "id" in API spec, mapped to fcode for UI compatibility
+        fcode: item.fcode || item.linkcode || item.id,
+        url: item.url || item.link,
+        isDirectory: Boolean(item.is_directory) || item.type === 0 || isFshareFolderUrl(item.url || item.link),
         originalFilename: item.name,
         fileSize: item.size || 0,
         score: 0, // API matching logic handles scoring internally
@@ -314,8 +393,38 @@
 
   // Actions
   async function handleDownload(item: any) {
-    // Build metadata if available
-    const tmdb = item.id
+    const url = fshareUrlForItem(item);
+    if (!url) {
+      toasts.error("Không tìm thấy link FShare cho asset này.");
+      return;
+    }
+
+    if (item.isDirectory || isFshareFolderUrl(url)) {
+      try {
+        toasts.info("Đang đọc folder FShare...");
+        const response = await fetch(`${API_BASE}/downloads/preview-link`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ url, recursive: false }),
+        });
+        const preview = response.ok ? await response.json() : { success: false, message: await response.text() };
+        if (!response.ok || preview?.success === false) throw new Error(preview?.message || "Không đọc được folder FShare.");
+        const files = mapPreviewItems(preview, url).filter((entry: any) => !entry.is_directory && fshareUrlForItem(entry));
+        let added = 0;
+        for (const file of files) {
+          const result = await downloadStore.addDownload({ url: fshareUrlForItem(file) });
+          if (result.success) added += 1;
+        }
+        if (added) toasts.success(`Đã thêm ${added} file vào queue`);
+        else toasts.error("Không có file nào được thêm vào queue.");
+      } catch (err) {
+        toasts.error(err instanceof Error ? err.message : "Không đọc được folder FShare.");
+      }
+      return;
+    }
+
+    const tmdb = item.id && !String(item.id).includes("fshare.vn")
       ? {
           tmdb_id: item.id,
           media_type: item.mediaType,
@@ -324,21 +433,21 @@
         }
       : undefined;
 
-    const result = await downloadStore.addDownload({
-      url: `https://fshare.vn/file/${item.fcode}`,
-      tmdb,
-    });
+    const result = await downloadStore.addDownload({ url, tmdb });
     if (result.success) toasts.success("FHUB activity added to queue");
-    else
-      toasts.error(
-        result.error || "FHUB could not add this asset to the queue",
-      );
+    else toasts.error(result.error || "FHUB could not add this asset to the queue");
   }
 
   function handleCopyUrl(item: any) {
-    navigator.clipboard.writeText(`https://fshare.vn/file/${item.fcode}`);
+    const url = fshareUrlForItem(item);
+    if (!url) {
+      toasts.error("Không tìm thấy link FShare cho asset này.");
+      return;
+    }
+    navigator.clipboard.writeText(url);
     toasts.success("FHUB source link copied");
   }
+
 
   function openSmartSearch(item: any) {
     ui.openSmartSearch({

@@ -131,6 +131,13 @@
   onMount(() => {
     loadLanguage();
     loadLinkHistory();
+    const params = new URLSearchParams(window.location.search);
+    const url = params.get("url")?.trim();
+    if (url) {
+      fshareLink = url;
+      showDownloadConfirm = false;
+      void tick().then(() => checkLink());
+    }
     void refreshAll();
     const refreshTimer = window.setInterval(refreshAll, 5000);
 

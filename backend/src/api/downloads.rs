@@ -21,8 +21,6 @@ pub fn router() -> Router<Arc<AppState>> {
     Router::new()
         .route("/", get(list_downloads))
         .route("/", post(add_download))
-        .route("/preview-folder", post(preview_folder_download))
-        .route("/preview-link", post(preview_link_download))
         .route("/:id", get(get_download))
         .route("/:id", delete(delete_download))
         .route("/:id/pause", post(pause_download))
@@ -39,6 +37,12 @@ pub fn router() -> Router<Arc<AppState>> {
         .route("/batch/:batch_id/items", get(get_batch_items))
         // Batch summaries for pagination
         .route("/batches", get(list_batch_summaries))
+}
+
+pub fn public_router() -> Router<Arc<AppState>> {
+    Router::new()
+        .route("/preview-folder", post(preview_folder_download))
+        .route("/preview-link", post(preview_link_download))
 }
 
 // ============================================================================
@@ -199,21 +203,21 @@ pub struct AddDownloadRequest {
 }
 
 #[derive(Debug, Deserialize)]
-struct PreviewFolderRequest {
+pub struct PreviewFolderRequest {
     url: String,
     #[serde(default)]
     recursive: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
-struct PreviewLinkRequest {
+pub struct PreviewLinkRequest {
     url: String,
     #[serde(default)]
     recursive: Option<bool>,
 }
 
 #[derive(Debug, Serialize)]
-struct PreviewFolderItem {
+pub struct PreviewFolderItem {
     name: String,
     url: String,
     size: u64,
@@ -226,7 +230,7 @@ struct PreviewFolderItem {
 }
 
 #[derive(Debug, Serialize)]
-struct PreviewFolderResponse {
+pub struct PreviewFolderResponse {
     success: bool,
     original_url: String,
     resolved_url: String,
@@ -315,39 +319,62 @@ fn extract_folder_code(folder_url: &str) -> Option<String> {
         return None;
     }
     let after = folder_url.split("/folder/").last()?;
-    let code = after.split('?').next().unwrap_or("");
+    let code = after
+        .split(|c| c == '?' || c == '&' || c == '/')
+        .next()
+        .unwrap_or("");
     if code.is_empty() { None } else { Some(code.to_string()) }
 }
 
 fn extract_folder_token(folder_url: &str) -> Option<String> {
-    folder_url
-        .split('?')
-        .nth(1)
-        .and_then(|qs| qs.split('&').find(|p| p.starts_with("token=")))
-        .and_then(|p| p.strip_prefix("token="))
-        .map(|s| s.to_string())
+    let query = folder_url.split('?').nth(1)?;
+    query
+        .split('&')
+        .find_map(|part| part.strip_prefix("token=").map(|s| s.to_string()))
 }
 
-#[derive(Debug, Deserialize)]
-struct FshareFolderApiResponse {
-    #[serde(default)]
-    items: Vec<FshareFolderApiItem>,
-}
-
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone)]
 struct FshareFolderApiItem {
-    #[serde(default)]
-    linkcode: String,
-    #[serde(default)]
-    name: String,
-    #[serde(rename = "type", default)]
-    item_type: serde_json::Value,
-    #[serde(default)]
-    size: serde_json::Value,
-    #[serde(default)]
-    mimetype: String,
-    #[serde(default)]
-    path: String,
+    linkcode: Option<String>,
+    name: Option<String>,
+    item_type: Option<serde_json::Value>,
+    size: Option<serde_json::Value>,
+    mimetype: Option<String>,
+    path: Option<String>,
+}
+
+fn json_string_field(value: &serde_json::Value, key: &str) -> Option<String> {
+    match value.get(key) {
+        Some(serde_json::Value::String(s)) => Some(s.clone()),
+        Some(serde_json::Value::Number(n)) => Some(n.to_string()),
+        _ => None,
+    }
+}
+
+fn parse_fshare_folder_items(body: &str) -> Result<Vec<FshareFolderApiItem>, serde_json::Error> {
+    let value: serde_json::Value = serde_json::from_str(body)?;
+    let array = value
+        .get("items")
+        .and_then(|v| v.as_array())
+        .or_else(|| value.get("data").and_then(|v| v.as_array()))
+        .or_else(|| value.as_array())
+        .cloned()
+        .unwrap_or_default();
+
+    let mut items = Vec::new();
+    for item in array {
+        let Some(obj) = item.as_object() else { continue };
+        let v = serde_json::Value::Object(obj.clone());
+        items.push(FshareFolderApiItem {
+            linkcode: json_string_field(&v, "linkcode").or_else(|| json_string_field(&v, "linkCode")),
+            name: json_string_field(&v, "name"),
+            item_type: v.get("type").cloned(),
+            size: v.get("size").cloned(),
+            mimetype: json_string_field(&v, "mimetype").or_else(|| json_string_field(&v, "mimeType")),
+            path: json_string_field(&v, "path"),
+        });
+    }
+    Ok(items)
 }
 
 async fn fetch_fshare_folder_page(
@@ -360,7 +387,7 @@ async fn fetch_fshare_folder_page(
         ("linkcode", folder_code.to_string()),
         ("sort", "type".to_string()),
         ("page", page.to_string()),
-        ("per-page", "100".to_string()),
+        ("limit", "100".to_string()),
     ];
 
     if let Some(token) = token {
@@ -387,10 +414,10 @@ async fn fetch_fshare_folder_page(
     let body = response.text().await
         .map_err(|e| (StatusCode::BAD_GATEWAY, format!("Không đọc được dữ liệu Fshare: {}", e)))?;
 
-    let parsed: FshareFolderApiResponse = serde_json::from_str(&body)
-        .map_err(|e| (StatusCode::BAD_GATEWAY, format!("Không parse được dữ liệu folder: {}", e)))?;
+    let items = parse_fshare_folder_items(&body)
+        .map_err(|e| (StatusCode::BAD_GATEWAY, format!("Không parse được dữ liệu folder VALUE-PARSER-v2: {}", e)))?;
 
-    Ok(parsed.items)
+    Ok(items)
 }
 
 async fn collect_fshare_folder_items(
@@ -418,35 +445,39 @@ async fn collect_fshare_folder_items(
 
         let page_len = page_items.len();
         for item in page_items {
-            if item.linkcode.is_empty() || item.name.is_empty() {
+            let Some(linkcode) = item.linkcode.as_deref().map(str::trim).filter(|s| !s.is_empty()) else {
                 continue;
-            }
-
-            let item_type = match &item.item_type {
-                serde_json::Value::String(s) => s.clone(),
-                serde_json::Value::Number(n) => n.to_string(),
-                _ => String::new(),
+            };
+            let Some(name) = item.name.as_deref().map(str::trim).filter(|s| !s.is_empty()) else {
+                continue;
             };
 
-            let size = match &item.size {
-                serde_json::Value::String(s) => s.parse::<u64>().unwrap_or(0),
-                serde_json::Value::Number(n) => n.as_u64().unwrap_or(0),
-                _ => 0,
-            };
+            let item_type = item.item_type.as_ref().and_then(|v| match v {
+                serde_json::Value::String(s) => Some(s.clone()),
+                serde_json::Value::Number(n) => Some(n.to_string()),
+                _ => None,
+            }).unwrap_or_default();
 
-            let is_directory = item_type == "0" || item.mimetype.is_empty();
+            let size = item.size.as_ref().and_then(|v| match v {
+                serde_json::Value::String(s) => s.parse::<u64>().ok(),
+                serde_json::Value::Number(n) => n.as_u64(),
+                _ => None,
+            }).unwrap_or(0);
+
+            let mimetype = item.mimetype.as_deref().unwrap_or("");
+            let is_directory = item_type == "0" || mimetype.is_empty();
             let url = if is_directory {
                 match &token {
-                    Some(t) if !t.is_empty() => format!("https://www.fshare.vn/folder/{}?token={}", item.linkcode, t),
-                    _ => format!("https://www.fshare.vn/folder/{}", item.linkcode),
+                    Some(t) if !t.is_empty() => format!("https://www.fshare.vn/folder/{}?token={}", linkcode, t),
+                    _ => format!("https://www.fshare.vn/folder/{}", linkcode),
                 }
             } else {
-                format!("https://www.fshare.vn/file/{}", item.linkcode)
+                format!("https://www.fshare.vn/file/{}", linkcode)
             };
-            let parsed_name = FilenameParser::parse(&item.name);
+            let parsed_name = FilenameParser::parse(name);
 
             collected.push(PreviewFolderItem {
-                name: item.name.clone(),
+                name: name.to_string(),
                 url: url.clone(),
                 size,
                 is_directory,
@@ -463,7 +494,7 @@ async fn collect_fshare_folder_items(
             }
         }
 
-        if page_len < 100 {
+        if page_len < 50 {
             break;
         }
         page += 1;
@@ -475,7 +506,7 @@ async fn collect_fshare_folder_items(
     Ok(collected)
 }
 
-async fn preview_link_download(
+pub async fn preview_link_download(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<PreviewLinkRequest>,
 ) -> Result<Json<PreviewFolderResponse>, (StatusCode, String)> {
@@ -526,7 +557,7 @@ async fn preview_link_download(
     }))
 }
 
-async fn preview_folder_download(
+pub async fn preview_folder_download(
     Json(payload): Json<PreviewFolderRequest>,
 ) -> Result<Json<PreviewFolderResponse>, (StatusCode, String)> {
     let resolved_url = normalize_external_url(&payload.url);
@@ -543,14 +574,14 @@ async fn preview_folder_download(
     let folder_name = first_page
         .iter()
         .find_map(|item| {
-            let name = item.path.rsplit('/').find(|part| !part.trim().is_empty())?.trim();
+            let path = item.path.as_deref()?;
+            let name = path.rsplit('/').find(|part| !part.trim().is_empty())?.trim();
             if name.is_empty() { None } else { Some(name.to_string()) }
         })
         .or_else(|| {
             first_page
                 .iter()
-                .find(|item| !item.name.trim().is_empty())
-                .map(|item| item.name.trim().to_string())
+                .find_map(|item| item.name.as_deref().map(str::trim).filter(|name| !name.is_empty()).map(str::to_string))
         })
         .unwrap_or_else(|| format!("Fshare Folder {}", folder_code));
 

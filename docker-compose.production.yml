@@ -20,6 +20,10 @@ services:
       # Keep the container path /appData.
       - /volume1/docker/fhub/appData:/appData
 
+      # Enables the web Settings → Update button to pull/recreate FHub when GitHub has a newer build.
+      # Remove this line if you prefer manual updates only.
+      - /var/run/docker.sock:/var/run/docker.sock
+
       # Downloads/media folder on the host NAS.
       # IMPORTANT: change /volume1/Video to your real folder if needed.
       # Keep the container path /downloads unless FHUB_DOWNLOADS_DIR is changed too.

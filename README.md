@@ -69,11 +69,39 @@ Create this folder first if it does not exist. Change only `/volume1/Video` to y
 
 ## Updating
 
+### Option 1: Manual update
+
+```bash
+./update.sh
+```
+
+Or, if you update from source:
+
 ```bash
 git pull
 docker compose pull
 docker compose up -d
 ```
+
+### Web update button
+
+In **Settings**, FHub checks GitHub for a newer commit/image. When one is available, the web UI shows an **Update now** button.
+
+For the button to update the container automatically, `docker-compose.yml` needs this volume under the `fhub` service:
+
+```yaml
+- /var/run/docker.sock:/var/run/docker.sock
+```
+
+New installs include this line. Existing installs only need to add it once, then run:
+
+```bash
+docker compose up -d
+```
+
+### Option 2: Auto-update with Watchtower
+
+Use `docker-compose.auto-update.yml` if you want FHub to check for new images automatically.
 
 ## Health check
 

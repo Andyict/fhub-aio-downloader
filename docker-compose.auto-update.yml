@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   fhub:
-    image: ghcr.io/nas2nd/fhub:latest
+    image: ghcr.io/andyict/fhub-aio-downloader:latest
     container_name: fhub
     restart: unless-stopped
     ports:
@@ -22,7 +22,6 @@ services:
     labels:
       - "com.centurylinklabs.watchtower.enable=true"
 
-  # Auto-update service (optional)
   watchtower:
     image: containrrr/watchtower:latest
     container_name: fhub-watchtower
@@ -33,5 +32,5 @@ services:
       - WATCHTOWER_CLEANUP=true
       - WATCHTOWER_LABEL_ENABLE=true
       - WATCHTOWER_INCLUDE_RESTARTING=true
-      - WATCHTOWER_SCHEDULE=0 0 4 * * *  # Check daily at 4 AM
-    command: --interval 86400  # Check every 24 hours
+      - WATCHTOWER_SCHEDULE=0 0 4 * * *
+    command: --interval 86400

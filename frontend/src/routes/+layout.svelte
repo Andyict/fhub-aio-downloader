@@ -59,6 +59,7 @@
   let hasFshareAccount = $derived(!!accountStore.primary);
   let isFshareUnverified = $derived(!!accountStore.primary && !accountStore.isVip && ["", "UNVERIFIED"].includes((accountStore.primary.rank || "").toUpperCase().trim()));
   let showFshareLogin = $state(false);
+  let sidebarCollapsed = $state(false);
   let fshareEmail = $state("");
   let fsharePassword = $state("");
   let showFsharePassword = $state(false);
@@ -83,6 +84,7 @@
   onMount(() => {
     syncLanguage();
     syncUiMode();
+    syncSidebarPreference();
     const onUiModeChange = (event: Event) => {
       const next = (event as CustomEvent<UiMode>).detail;
       if (next === "modern" || next === "classic") uiMode = next;
@@ -241,6 +243,23 @@
     }
   }
 
+  function syncSidebarPreference() {
+    try {
+      sidebarCollapsed = localStorage.getItem("fhub-sidebar-collapsed") === "true";
+    } catch {
+      // Ignore storage failures.
+    }
+  }
+
+  function toggleSidebar() {
+    sidebarCollapsed = !sidebarCollapsed;
+    try {
+      localStorage.setItem("fhub-sidebar-collapsed", String(sidebarCollapsed));
+    } catch {
+      // Ignore storage failures.
+    }
+  }
+
   function syncUiMode() {
     try {
       const saved = localStorage.getItem("fhub-ui-mode");
@@ -295,12 +314,17 @@
     </div>
   </div>
 {:else}
-  <div class="fhub-shell" class:classic-mode={uiMode === "classic"}>
+  <div class="fhub-shell" class:classic-mode={uiMode === "classic"} class:sidebar-collapsed={sidebarCollapsed}>
     <aside class="fhub-sidebar" aria-label="FHUB navigation">
-      <a class="fhub-brand" href="/" aria-label="FHUB home">
-        <img src="/images/logo5.png" alt="FHUB" />
-        <span>FShare & Torrent tốc độ cao</span>
-      </a>
+      <div class="sidebar-head">
+        <a class="fhub-brand" href="/" aria-label="FHUB home">
+          <img src="/images/logo5.png" alt="FHUB" />
+          <span>FShare & Torrent tốc độ cao</span>
+        </a>
+        <button class="sidebar-toggle" type="button" aria-label={sidebarCollapsed ? "Mở rộng thanh tab" : "Thu gọn thanh tab"} title={sidebarCollapsed ? "Mở rộng" : "Thu gọn"} onclick={toggleSidebar}>
+          <span class="material-icons" aria-hidden="true">{sidebarCollapsed ? "chevron_right" : "chevron_left"}</span>
+        </button>
+      </div>
 
       <nav class="fhub-nav">
         {#each navItems as item, index}
@@ -338,12 +362,18 @@
           </div>
         </div>
         {#if uiMode !== "classic"}
-        <form class="top-search" action="/discover" onsubmit={(event) => {
+        <form class="top-search" action="/discover" onsubmit={async (event) => {
           const form = event.currentTarget as HTMLFormElement;
           const input = form.elements.namedItem("q") as HTMLInputElement | null;
           const value = input?.value.trim();
-          if (value) window.location.href = `/discover?q=${encodeURIComponent(value)}`;
           event.preventDefault();
+          if (!value) return;
+          const isFshare = /https?:\/\/(www\.)?fshare\.vn\/(file|folder)\//i.test(value);
+          if (isFshare) {
+            await goto(`/downloads?url=${encodeURIComponent(value)}`, { replaceState: false, invalidateAll: true, noScroll: true });
+            return;
+          }
+          await goto(`/discover?q=${encodeURIComponent(value)}`, { replaceState: false, invalidateAll: true, noScroll: true });
         }}>
           <span class="material-icons">search</span>
           <input name="q" placeholder="Tìm phim, link FShare..." />
@@ -501,14 +531,19 @@
   @keyframes sync-spin { to { transform: rotate(360deg); } }
 
   .fhub-shell {
+    --fhub-sidebar-width: 276px;
     height: 100dvh;
     overflow: hidden;
     display: grid;
-    grid-template-columns: 276px minmax(0, 1fr);
+    grid-template-columns: var(--fhub-sidebar-width) minmax(0, 1fr);
     background:
       radial-gradient(circle at 18% 0%, rgba(248, 193, 74, 0.1), transparent 25%),
       linear-gradient(135deg, rgba(124, 58, 237, 0.16), transparent 34%),
       linear-gradient(180deg, #080a12 0%, #0d111c 48%, #05070d 100%);
+  }
+
+  .fhub-shell.sidebar-collapsed {
+    --fhub-sidebar-width: 92px;
   }
 
   .fhub-shell::before {
@@ -537,6 +572,30 @@
     backdrop-filter: blur(24px) saturate(150%);
   }
 
+  .sidebar-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 38px;
+    align-items: start;
+    gap: 0.6rem;
+  }
+
+  .sidebar-toggle {
+    width: 38px;
+    height: 38px;
+    display: grid;
+    place-items: center;
+    border: 1px solid rgba(167, 139, 250, 0.2);
+    border-radius: 13px;
+    color: rgba(226, 232, 240, 0.78);
+    background: rgba(255, 255, 255, 0.055);
+    cursor: pointer;
+  }
+
+  .sidebar-toggle:hover {
+    color: #fff;
+    background: rgba(167, 139, 250, 0.16);
+  }
+
   .fhub-brand,
   .fhub-mobile-brand {
     display: inline-grid;
@@ -563,6 +622,43 @@
     width: 40px;
     height: 40px;
     object-fit: contain;
+  }
+
+  .sidebar-collapsed .sidebar-head {
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
+
+  .sidebar-collapsed .fhub-brand {
+    justify-items: center;
+  }
+
+  .sidebar-collapsed .fhub-brand img {
+    width: 48px;
+    content: url("/images/fhub-icon.clean.png");
+  }
+
+  .sidebar-collapsed .fhub-brand span,
+  .sidebar-collapsed .nav-group,
+  .sidebar-collapsed .fhub-nav a span:not(.material-icons),
+  .sidebar-collapsed .sign-out-panel div {
+    display: none;
+  }
+
+  .sidebar-collapsed .fhub-sidebar {
+    gap: 1rem;
+    padding: 1.15rem 0.85rem;
+  }
+
+  .sidebar-collapsed .fhub-nav a {
+    justify-content: center;
+    padding: 0;
+  }
+
+  .sidebar-collapsed .sign-out-panel {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    padding: 0.62rem;
   }
 
   .fhub-brand span,

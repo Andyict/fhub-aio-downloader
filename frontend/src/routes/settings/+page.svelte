@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   type SettingsTab = "overview" | "accounts" | "activity";
+  type UpdateStatus = { current_version: string; current_commit?: string | null; latest_commit?: string | null; latest_commit_url?: string | null; update_available: boolean; updater_available: boolean; image: string; container: string; message: string; };
   type UiLanguage = "vi" | "en";
   type UiMode = "modern" | "classic";
 
@@ -144,6 +145,11 @@
   let newPassword = $state("");
   let newRole = $state<"admin" | "user">("user");
   let users = $state<AppUser[]>([]);
+  let updateStatus = $state<UpdateStatus | null>(null);
+  let checkingUpdate = $state(false);
+  let updatingApp = $state(false);
+  let updateMessage = $state("");
+  let showUpdateConfirm = $state(false);
 
   const activeUsers = $derived(users.filter((user) => user.is_active).length);
   const adminUsers = $derived(users.filter((user) => user.role === "admin").length);
@@ -168,6 +174,7 @@
         showAdminModal = true;
       }
       await refreshAll();
+      await checkUpdateStatus();
     })();
     return () => window.removeEventListener("fhub-language-change", onLanguageChange);
   });
@@ -273,6 +280,46 @@
     return isFshareWrongPassword(message)
       ? "Sai mật khẩu FShare. Kiểm tra lại rồi đăng nhập lại."
       : (message || "Đăng nhập FShare thất bại");
+  }
+
+
+  async function checkUpdateStatus() {
+    if (!isAdminUser) return;
+    checkingUpdate = true;
+    try {
+      const response = await fetch("/api/update/status", { credentials: "include" });
+      if (!response.ok) throw new Error(await response.text());
+      updateStatus = await response.json();
+      updateMessage = updateStatus?.message || "Đã kiểm tra cập nhật.";
+    } catch (error) {
+      updateMessage = error instanceof Error ? error.message : "Không kiểm tra được cập nhật.";
+    } finally {
+      checkingUpdate = false;
+    }
+  }
+
+  async function runWebUpdate() {
+    if (!updateStatus?.updater_available) {
+      updateMessage = "Bản cài này chưa bật web updater. Thêm /var/run/docker.sock vào docker-compose.yml rồi restart FHub một lần.";
+      return;
+    }
+    showUpdateConfirm = true;
+  }
+
+  async function confirmWebUpdate() {
+    showUpdateConfirm = false;
+    updatingApp = true;
+    updateMessage = "Đang cập nhật FHub...";
+    try {
+      const response = await fetch("/api/update/run", { method: "POST", credentials: "include" });
+      const result = response.ok ? await response.json() : { success: false, message: await response.text() };
+      updateMessage = result.message || (result.success ? "Đã bắt đầu cập nhật." : "Cập nhật thất bại.");
+      if (result.success) setTimeout(() => window.location.reload(), 12000);
+    } catch (error) {
+      updateMessage = error instanceof Error ? error.message : "Không chạy được cập nhật.";
+    } finally {
+      updatingApp = false;
+    }
   }
 
   async function saveFshareAccount() {
@@ -471,7 +518,7 @@
       <h1>{uiLanguage === "vi" ? "Cài đặt" : "Settings"}</h1>
     </div>
     <div class="hero-actions">
-      <button type="button" class="ghost-button" onclick={refreshAll} aria-label={uiLanguage === "vi" ? "Làm mới" : "Refresh"}>
+      <button type="button" class="ghost-button" onclick={async () => { await refreshAll(); await checkUpdateStatus(); }} aria-label={uiLanguage === "vi" ? "Làm mới" : "Refresh"}>
         <span class="material-icons">refresh</span>
         {uiLanguage === "vi" ? "Làm mới" : "Refresh"}
       </button>
@@ -490,6 +537,26 @@
     <article><span class="material-icons">cloud_done</span><div><strong>FShare</strong><small>{settings.fshare_configured ? "Đã cấu hình" : "Chưa cấu hình"}</small></div></article>
     <article><span class="material-icons">dns</span><div><strong>Server</strong><small>{`${settings.server_host}:${settings.server_port}`}</small></div></article>
   </section>
+
+  {#if updateStatus?.update_available || updateStatus || updateMessage}
+    <section class="update-banner" class:available={updateStatus?.update_available}>
+      <div class="update-icon"><span class="material-icons">system_update_alt</span></div>
+      <div class="update-copy">
+        <strong>{updateStatus?.update_available ? "Có bản FHub mới trên GitHub" : "FHub đang ở trạng thái cập nhật"}</strong>
+        <small>Hiện tại: {updateStatus?.current_commit || updateStatus?.current_version || "không rõ"} · Mới nhất: {updateStatus?.latest_commit || "đang kiểm tra"}</small>
+        {#if updateMessage}<p>{updateMessage}</p>{/if}
+        {#if updateStatus && !updateStatus.updater_available}
+          <p class="update-warning">Muốn bấm update trực tiếp trên web, thêm <code>/var/run/docker.sock:/var/run/docker.sock</code> vào volumes rồi restart FHub một lần.</p>
+        {/if}
+      </div>
+      <div class="update-actions">
+        <button type="button" class="ghost-button" onclick={checkUpdateStatus} disabled={checkingUpdate}>{checkingUpdate ? "Đang check..." : "Check update"}</button>
+        {#if updateStatus?.update_available}
+          <button type="button" class="primary-button update-now" onclick={runWebUpdate} disabled={updatingApp || !updateStatus.updater_available}>{updatingApp ? "Đang update..." : "Update now"}</button>
+        {/if}
+      </div>
+    </section>
+  {/if}
 
   <nav class="settings-tabs" aria-label="Settings sections">
     {#each tabOrder as tab}
@@ -511,6 +578,29 @@
       <article class="panel wide">{@render ActivityPanel()}</article>
     {/if}
   </section>
+
+  {#if showUpdateConfirm}
+    <div class="update-modal-backdrop" role="presentation" onclick={(event) => { if (event.target === event.currentTarget) showUpdateConfirm = false; }}>
+      <section class="update-modal" role="dialog" aria-modal="true" aria-labelledby="update-confirm-title">
+        <div class="update-modal-glow glow-one"></div>
+        <div class="update-modal-glow glow-two"></div>
+        <button type="button" class="update-modal-close" aria-label="Đóng" onclick={() => showUpdateConfirm = false} disabled={updatingApp}>
+          <span class="material-icons">close</span>
+        </button>
+        <div class="update-modal-head compact">
+          <div class="update-modal-mark"><span class="material-icons">system_update_alt</span></div>
+          <h2 id="update-confirm-title">Cập nhật FHub?</h2>
+          <p>Ứng dụng sẽ tự cập nhật và khởi động lại. Dữ liệu hiện có vẫn được giữ nguyên.</p>
+        </div>
+        <div class="update-modal-actions simple">
+          <button type="button" class="update-cancel-button" onclick={() => showUpdateConfirm = false} disabled={updatingApp}>Hủy</button>
+          <button type="button" class="update-confirm-button" onclick={confirmWebUpdate} disabled={updatingApp}>
+            <span>{updatingApp ? "Đang update..." : "Update"}</span>
+          </button>
+        </div>
+      </section>
+    </div>
+  {/if}
 
   {#if activeTab === "overview"}
     <a class="settings-mobile-signout" href="/login" aria-label={t.signOut}>
@@ -788,12 +878,23 @@
   .hero-signal { display: inline-flex; align-items: center; gap: .5rem; color: rgba(226,232,240,.72); font-size: .82rem; font-weight: 800; }
   .hero-signal span { width: 10px; height: 10px; border-radius: 999px; background: #38bdf8; box-shadow: 0 0 20px rgba(56,189,248,.82); }
   .overview-strip { display: none; }
-  .overview-strip article, .status-line, .panel { border: 1px solid rgba(148,163,184,.16); background: linear-gradient(135deg, rgba(124,58,237,.08), transparent 44%), linear-gradient(180deg, rgba(20,26,42,.92), rgba(9,12,21,.86)); box-shadow: 0 18px 48px rgba(0,0,0,.26); backdrop-filter: blur(18px) saturate(140%); }
+  .overview-strip article, .status-line, .panel, .update-banner { border: 1px solid rgba(148,163,184,.16); background: linear-gradient(135deg, rgba(124,58,237,.08), transparent 44%), linear-gradient(180deg, rgba(20,26,42,.92), rgba(9,12,21,.86)); box-shadow: 0 18px 48px rgba(0,0,0,.26); backdrop-filter: blur(18px) saturate(140%); }
   .overview-strip article { min-height: 104px; padding: 1rem; border-radius: 18px; }
   .overview-strip small, .overview-strip span, .status-line, label span, .service-row small, .user-copy small, .audit-list span, .note-list p { color: rgba(226,232,240,.64); }
   .overview-strip small { display: block; font-weight: 850; }
   .overview-strip strong { display: block; margin: .35rem 0 .18rem; color: #fff; font-size: 2rem; line-height: 1; letter-spacing: -.05em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .overview-strip span { font-size: .82rem; }
+  .update-banner { display: grid; grid-template-columns: 52px minmax(0,1fr) auto; align-items: center; gap: .9rem; padding: .95rem; border-radius: 18px; }
+  .update-banner.available { border-color: rgba(34,197,94,.32); background: radial-gradient(circle at 0 0, rgba(34,197,94,.16), transparent 34%), linear-gradient(180deg, rgba(20,26,42,.94), rgba(9,12,21,.88)); }
+  .update-icon { width: 52px; height: 52px; display: grid; place-items: center; border-radius: 16px; color: #080a12; background: linear-gradient(135deg,#86efac,#f8c14a); }
+  .update-icon .material-icons { color: #080a12; }
+  .update-copy strong, .update-copy small, .update-copy p { display: block; }
+  .update-copy strong { color: #fff; font-size: 1rem; }
+  .update-copy small { margin-top: .18rem; color: rgba(226,232,240,.68); font-weight: 850; }
+  .update-copy p { margin-top: .32rem; color: rgba(226,232,240,.62); font-size: .82rem; line-height: 1.35; }
+  .update-warning code { padding: .08rem .28rem; border-radius: 6px; background: rgba(0,0,0,.32); color: #fde68a; }
+  .update-actions { display: grid; gap: .5rem; min-width: 150px; }
+  .update-now { min-height: 44px; }
   .status-line { min-height: 52px; display: flex; align-items: center; padding: .9rem 1rem; border-radius: 16px; }
   .console-grid, .tab-grid { display: grid; gap: 1rem; align-items: start; }
   .console-grid { grid-template-columns: minmax(330px,.95fr) minmax(360px,1.05fr) minmax(300px,.8fr); }
@@ -966,7 +1067,8 @@
     .settings-tabs strong { font-size: .76rem; }
     .overview-strip { display: none; }
     .status-line { display: none; }
-    .download-meter, .user-row, .storage-map { grid-template-columns: 1fr; }
+    .download-meter, .user-row, .storage-map, .update-banner { grid-template-columns: 1fr; }
+    .update-actions { grid-template-columns: 1fr 1fr; min-width: 0; }
     .download-preset-grid { grid-template-columns: 1fr; }
     .download-preset-grid button { min-height: 64px; }
     .compact-download-fields { grid-template-columns: 1fr; }
@@ -1008,5 +1110,51 @@
   .mini-history { display: grid; gap: .12rem; padding: .5rem .55rem; border-radius: 12px; color: rgba(226,232,240,.64); background: rgba(3,6,14,.35); font-size: .75rem; }
   .mini-history strong { color: #fff; font-size: .8rem; }
   @media(max-width:720px){ .settings-grid{grid-template-columns:1fr;gap:1rem}.settings-hero{display:none}.overview-strip{display:none}.status-line{display:none}.download-overview-panel{margin-top:.45rem}.settings-mobile-signout{min-height:52px;display:flex;align-items:center;justify-content:center;gap:.55rem;margin:.4rem 0 1.15rem;padding:0 1rem;border-radius:18px;border:1px solid rgba(248,113,113,.22);color:#fecaca;text-decoration:none;background:rgba(127,29,29,.16);font-weight:950}.settings-mobile-signout .material-icons{color:#fecaca}.users-panel{padding:.75rem!important}.users-title{margin-bottom:.55rem}.user-line{min-height:52px;grid-template-columns:34px minmax(0,1fr) 22px;padding:.46rem .52rem}.avatar.mini{width:34px;height:34px;border-radius:11px}.user-copy strong{font-size:.94rem}.user-copy small{font-size:.74rem}.user-tools{padding:0 .52rem .52rem;gap:.42rem}.tool-buttons button{min-height:36px}.inline-field input,.inline-field select{min-height:38px}.mini-history{font-size:.72rem}}
+
+
+  .update-modal-backdrop { position: fixed; inset: 0; z-index: 99999; display: grid; place-items: center; padding: clamp(.9rem, 3vw, 2rem); background: radial-gradient(circle at 50% 0%, rgba(167,139,250,.18), transparent 34%), rgba(2,5,13,.76); backdrop-filter: blur(22px) saturate(150%); }
+  .update-modal { position: relative; isolation: isolate; width: min(640px, 100%); overflow: hidden; display: grid; gap: 1rem; padding: clamp(1rem, 3vw, 1.45rem); border: 1px solid rgba(167,139,250,.34); border-radius: 30px; background: radial-gradient(circle at 12% 0%, rgba(248,193,74,.20), transparent 30%), radial-gradient(circle at 96% 4%, rgba(167,139,250,.20), transparent 32%), linear-gradient(180deg, rgba(18,24,40,.98), rgba(6,9,18,.98)); box-shadow: 0 38px 130px rgba(0,0,0,.62), 0 0 0 1px rgba(255,255,255,.035) inset, 0 0 60px rgba(167,139,250,.12); }
+  .update-modal::before { content: ""; position: absolute; inset: 10px; z-index: -1; border-radius: 24px; border: 1px solid rgba(255,255,255,.045); pointer-events: none; }
+  .update-modal::after { content: ""; position: absolute; left: 8%; right: 8%; top: 0; height: 1px; background: linear-gradient(90deg, transparent, rgba(248,193,74,.88), rgba(167,139,250,.82), transparent); }
+  .update-modal-glow { position: absolute; z-index: -2; border-radius: 999px; filter: blur(36px); opacity: .75; pointer-events: none; }
+  .update-modal-glow.glow-one { width: 220px; height: 220px; left: -80px; top: -82px; background: rgba(248,193,74,.28); }
+  .update-modal-glow.glow-two { width: 260px; height: 260px; right: -120px; bottom: -112px; background: rgba(167,139,250,.26); }
+  .update-modal-close { position: absolute; right: .9rem; top: .9rem; width: 42px; height: 42px; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.10); border-radius: 15px; color: rgba(248,250,252,.78); background: rgba(255,255,255,.055); backdrop-filter: blur(12px); }
+  .update-modal-close:hover { color: #fff; background: rgba(255,255,255,.10); }
+  .update-modal-close .material-icons { color: inherit; font-size: 1.2rem; }
+  .update-modal-head { display: grid; gap: .55rem; padding-right: 2.7rem; }
+  .update-modal-mark { width: 66px; height: 66px; display: grid; place-items: center; border-radius: 22px; color: #080a12; background: linear-gradient(135deg, #f8d983 0%, #e5bdd6 48%, #a78bfa 100%); box-shadow: 0 18px 44px rgba(167,139,250,.22), 0 0 42px rgba(248,193,74,.14), inset 0 1px 0 rgba(255,255,255,.42); }
+  .update-modal-mark .material-icons { color: #080a12; font-size: 2.05rem; }
+  .update-modal-kicker { width: fit-content; padding: .34rem .6rem; border: 1px solid rgba(248,193,74,.24); border-radius: 999px; color: #fde68a; background: rgba(248,193,74,.075); font-size: .68rem; font-weight: 1000; letter-spacing: .14em; }
+  .update-modal h2 { color: #fff; font-size: clamp(2.1rem, 6vw, 3.35rem); font-weight: 1000; line-height: .92; letter-spacing: -.07em; text-shadow: 0 18px 42px rgba(0,0,0,.36); }
+  .update-modal-head p { max-width: 560px; color: rgba(248,250,252,.78); font-size: clamp(.98rem, 2.2vw, 1.12rem); line-height: 1.48; }
+  .update-version-grid { display: grid; grid-template-columns: minmax(0,1fr) 42px minmax(0,1fr); align-items: center; gap: .7rem; }
+  .update-version-card { min-width: 0; display: grid; gap: .28rem; min-height: 86px; padding: .82rem .9rem; border: 1px solid rgba(148,163,184,.14); border-radius: 20px; background: rgba(255,255,255,.055); box-shadow: inset 0 1px 0 rgba(255,255,255,.045); }
+  .update-version-card.latest { border-color: rgba(248,193,74,.26); background: radial-gradient(circle at 0 0, rgba(248,193,74,.12), transparent 42%), rgba(255,255,255,.06); }
+  .update-version-card span { color: rgba(226,232,240,.58); font-size: .76rem; font-weight: 950; letter-spacing: .08em; text-transform: uppercase; }
+  .update-version-card strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #fff; font-size: clamp(1.05rem, 3vw, 1.28rem); font-weight: 1000; letter-spacing: -.03em; }
+  .update-version-card.latest strong { color: #fde68a; }
+  .update-version-arrow { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 15px; color: #080a12; background: linear-gradient(135deg,#f8c14a,#a78bfa); box-shadow: 0 12px 28px rgba(167,139,250,.18); }
+  .update-version-arrow .material-icons { color: #080a12; font-size: 1.22rem; }
+  .update-modal-note { display: grid; grid-template-columns: 38px minmax(0,1fr); align-items: start; gap: .68rem; padding: .78rem .85rem; border: 1px solid rgba(56,189,248,.16); border-radius: 18px; background: rgba(56,189,248,.06); }
+  .update-modal-note .material-icons { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 13px; color: #7dd3fc; background: rgba(56,189,248,.1); font-size: 1.08rem; }
+  .update-modal-note p { color: rgba(226,232,240,.68); font-size: .86rem; line-height: 1.42; }
+  .update-modal-actions { display: grid; grid-template-columns: .85fr 1.25fr; gap: .75rem; }
+  .update-cancel-button, .update-confirm-button { min-height: 64px; border-radius: 21px; padding: 0 1rem; font-size: clamp(1rem, 2.8vw, 1.32rem); font-weight: 1000; }
+  .update-cancel-button { color: #f8fafc; border: 1px solid rgba(148,163,184,.18); background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.045)); box-shadow: inset 0 1px 0 rgba(255,255,255,.055); }
+  .update-confirm-button { display: inline-flex; align-items: center; justify-content: center; gap: .6rem; color: #080a12; border: 0; background: linear-gradient(135deg,#f8c14a 0%,#e0b7d4 52%,#a78bfa 100%); box-shadow: 0 16px 40px rgba(167,139,250,.24), inset 0 1px 0 rgba(255,255,255,.34); }
+  .update-confirm-button .material-icons { color: #080a12; font-size: 1.24rem; }
+  .update-cancel-button:disabled, .update-confirm-button:disabled { opacity: .55; cursor: not-allowed; }
+  @media (max-width: 560px) { .update-modal { border-radius: 24px; } .update-modal-head { padding-right: 2.2rem; } .update-version-grid { grid-template-columns: 1fr; } .update-version-arrow { justify-self: center; transform: rotate(90deg); } .update-modal-actions { grid-template-columns: 1fr; } .update-cancel-button, .update-confirm-button { min-height: 56px; } }
+
+  .update-modal { max-width: 430px; gap: 1.15rem; padding: clamp(1.05rem, 4vw, 1.35rem); border-radius: 28px; }
+  .update-modal-head.compact { place-items: center; padding-right: 0; text-align: center; }
+  .update-modal-head.compact .update-modal-mark { width: 72px; height: 72px; border-radius: 24px; }
+  .update-modal-head.compact h2 { max-width: 8ch; font-size: clamp(2rem, 8vw, 2.75rem); line-height: .94; }
+  .update-modal-head.compact p { max-width: 330px; font-size: .98rem; line-height: 1.45; }
+  .update-modal-actions.simple { grid-template-columns: 1fr 1fr; margin-top: .2rem; }
+  .update-modal-actions.simple .update-cancel-button,
+  .update-modal-actions.simple .update-confirm-button { min-height: 58px; }
+  @media (max-width: 560px) { .update-modal { width: min(360px, 100%); max-height: calc(100dvh - 150px); overflow: auto; } .update-modal-head.compact .update-modal-mark { width: 64px; height: 64px; } .update-modal-head.compact h2 { font-size: 2.25rem; } .update-modal-actions.simple { grid-template-columns: 1fr 1fr; } }
 
 </style>

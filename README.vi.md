@@ -69,11 +69,39 @@ Nếu thư mục này chưa có thì nên tạo trước. Nếu muốn đổi th
 
 ## Cập nhật
 
+### Cách 1: Cập nhật thủ công
+
+```bash
+./update.sh
+```
+
+Hoặc nếu bạn cài từ source repo:
+
 ```bash
 git pull
 docker compose pull
 docker compose up -d
 ```
+
+### Cập nhật bằng nút trong web
+
+Trong **Settings**, FHub tự kiểm tra GitHub. Nếu có commit/image mới, web sẽ hiện nút **Update now**.
+
+Để nút này tự cập nhật được container, `docker-compose.yml` cần có dòng sau trong `volumes` của service `fhub`:
+
+```yaml
+- /var/run/docker.sock:/var/run/docker.sock
+```
+
+Bản cài mới đã có sẵn dòng này. Người đang dùng bản cũ chỉ cần thêm dòng trên rồi chạy:
+
+```bash
+docker compose up -d
+```
+
+### Cách 2: Tự động cập nhật bằng Watchtower
+
+Dùng `docker-compose.auto-update.yml` nếu bạn muốn FHub tự kiểm tra image mới và cập nhật định kỳ.
 
 ## Kiểm tra sức khỏe app
 

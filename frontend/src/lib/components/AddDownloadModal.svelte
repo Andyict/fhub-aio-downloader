@@ -250,6 +250,7 @@
         response = await fetch(`/api/downloads/preview-folder`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          credentials: "include",
           body: JSON.stringify({ url: url.trim(), recursive: recursivePreview }),
           signal: controller.signal,
         });

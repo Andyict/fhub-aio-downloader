@@ -12,6 +12,10 @@ services:
     volumes:
       - fhub_appdata:/appData
 
+      # Cho phép nút Update trong web tự pull/recreate container khi GitHub có bản mới.
+      # Nếu không muốn FHub quản lý Docker, có thể xóa dòng này và update thủ công bằng ./update.sh.
+      - /var/run/docker.sock:/var/run/docker.sock
+
       # Video/file tải về sẽ được lưu ở đây.
       # Chỉ đổi /volume1/Video thành thư mục trên NAS của bạn; giữ nguyên /downloads.
       - /volume1/Video:/downloads
