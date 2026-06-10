@@ -123,6 +123,52 @@ volumes:
   fhub_appdata:
 ```
 
+## Bản test sạch
+
+Nếu muốn cài mới tinh, không giữ data cũ, dùng file:
+
+```yaml
+# docker-compose.test.yml
+version: '3.8'
+
+services:
+  fhub:
+    image: ghcr.io/andyict/fhub-aio-downloader:latest
+    container_name: fhub
+    restart: unless-stopped
+
+    ports:
+      - "8584:8484"
+
+    volumes:
+      - fhub_appdata_test:/appData
+      - /volume2/homes/vanthinh194/Phim:/downloads
+
+    environment:
+      - TZ=Asia/Ho_Chi_Minh
+      - FHUB_APPDATA_DIR=/appData
+      - FHUB_DOWNLOADS_DIR=/downloads
+      - FHUB_SEGMENTS_PER_DOWNLOAD=16
+      - FHUB_MAX_CONCURRENT=4
+      - RUST_LOG=fhub=info,tower_http=info
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8484/api/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  fhub_appdata_test:
+```
+
+Chạy:
+
+```bash
+docker compose -f docker-compose.test.yml up -d
+```
+
 ## Thiết lập lần đầu
 
 1. Mở `http://IP_NAS:8584`.
