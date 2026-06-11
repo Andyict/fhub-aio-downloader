@@ -45,6 +45,9 @@ services:
       # Chỉ đổi /volume1/Video thành thư mục trên NAS của bạn; giữ nguyên /downloads.
       - /volume1/Video:/downloads
 
+    networks:
+      - fhub_net
+
     environment:
       - TZ=Asia/Ho_Chi_Minh
       - FHUB_APPDATA_DIR=/appData
@@ -52,9 +55,31 @@ services:
       - FHUB_SEGMENTS_PER_DOWNLOAD=16
       - FHUB_MAX_CONCURRENT=4
       - RUST_LOG=fhub=info,tower_http=info
+      - FHUB_UPDATER_URL=http://fhub-updater:8585
+      - FHUB_CONTAINER_NAME=fhub
+      - FHUB_UPDATE_IMAGE=ghcr.io/andyict/fhub-aio:latest
+
+  fhub-updater:
+    image: ghcr.io/andyict/fhub-aio:latest
+    container_name: fhub-updater
+    restart: unless-stopped
+    command: ["/app/fhub", "updater"]
+    networks:
+      - fhub_net
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - TZ=Asia/Ho_Chi_Minh
+      - RUST_LOG=fhub=info,tower_http=info
+      - FHUB_CONTAINER_NAME=fhub
+      - FHUB_UPDATE_IMAGE=ghcr.io/andyict/fhub-aio:latest
 
 volumes:
   fhub_appdata:
+
+networks:
+  fhub_net:
+    name: fhub_net
 ```
 
 ## Lưu ý đường dẫn tải về
@@ -87,13 +112,9 @@ docker compose up -d
 
 Trong **Settings**, FHub tự kiểm tra GitHub. Nếu có commit/image mới, web sẽ hiện nút **Update now**.
 
-Để nút này tự cập nhật được container, `docker-compose.yml` cần có dòng sau trong `volumes` của service `fhub`:
+Để nút này tự cập nhật được container, hãy dùng mẫu compose mới có thêm service **fhub-updater**. `fhub` chính không cần mount `/var/run/docker.sock`; chỉ helper updater mới cần socket đó.
 
-```yaml
-- /var/run/docker.sock:/var/run/docker.sock
-```
-
-Bản cài mới đã có sẵn dòng này. Người đang dùng bản cũ chỉ cần thêm dòng trên rồi chạy:
+Sau khi cập nhật `docker-compose.yml`, chạy:
 
 ```bash
 docker compose up -d

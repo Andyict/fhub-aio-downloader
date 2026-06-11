@@ -45,6 +45,9 @@ services:
       # Change only /volume1/Video to your NAS folder; keep /downloads unchanged.
       - /volume1/Video:/downloads
 
+    networks:
+      - fhub_net
+
     environment:
       - TZ=Asia/Ho_Chi_Minh
       - FHUB_APPDATA_DIR=/appData
@@ -52,9 +55,31 @@ services:
       - FHUB_SEGMENTS_PER_DOWNLOAD=16
       - FHUB_MAX_CONCURRENT=4
       - RUST_LOG=fhub=info,tower_http=info
+      - FHUB_UPDATER_URL=http://fhub-updater:8585
+      - FHUB_CONTAINER_NAME=fhub
+      - FHUB_UPDATE_IMAGE=ghcr.io/andyict/fhub-aio:latest
+
+  fhub-updater:
+    image: ghcr.io/andyict/fhub-aio:latest
+    container_name: fhub-updater
+    restart: unless-stopped
+    command: ["/app/fhub", "updater"]
+    networks:
+      - fhub_net
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - TZ=Asia/Ho_Chi_Minh
+      - RUST_LOG=fhub=info,tower_http=info
+      - FHUB_CONTAINER_NAME=fhub
+      - FHUB_UPDATE_IMAGE=ghcr.io/andyict/fhub-aio:latest
 
 volumes:
   fhub_appdata:
+
+networks:
+  fhub_net:
+    name: fhub_net
 ```
 
 ## Download path
@@ -87,13 +112,9 @@ docker compose up -d
 
 In **Settings**, FHub checks GitHub for a newer commit/image. When one is available, the web UI shows an **Update now** button.
 
-For the button to update the container automatically, `docker-compose.yml` needs this volume under the `fhub` service:
+For the button to update the container automatically, use the helper-based compose setup shown above. The `fhub` service does **not** need to mount `/var/run/docker.sock` directly; only the `fhub-updater` helper does.
 
-```yaml
-- /var/run/docker.sock:/var/run/docker.sock
-```
-
-New installs include this line. Existing installs only need to add it once, then run:
+After updating your compose file, run:
 
 ```bash
 docker compose up -d
