@@ -612,9 +612,11 @@
         const path = detail.poster_path || detail.backdrop_path;
         const viTitle = detail.title_vi || detail.vietnamese_title || detail.vi_title || detail.local_title || detail.title || detail.name || "";
         const runtime = Number(detail.runtime || detail.episode_run_time?.[0] || 0);
-        return [item.key, path ? `https://image.tmdb.org/t/p/w342${path}` : "", { viTitle, runtime }] as const;
+        const mediaDetail: { viTitle?: string; runtime?: number } = { viTitle, runtime };
+        return [item.key, path ? `https://image.tmdb.org/t/p/w342${path}` : "", mediaDetail] as const;
       } catch {
-        return [item.key, "", {}] as const;
+        const mediaDetail: { viTitle?: string; runtime?: number } = {};
+        return [item.key, "", mediaDetail] as const;
       }
     }));
 
