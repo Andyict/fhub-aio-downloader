@@ -146,6 +146,8 @@ export interface AddDownloadRequest {
   batch_id?: string;
   /** Batch name for display purposes */
   batch_name?: string;
+  /** Optional folder name under the download root for manual series grouping */
+  folder_name?: string;
 }
 
 /**

@@ -38,6 +38,8 @@
 
   let url = $state("");
   let filename = $state("");
+  let seriesMode = $state(false);
+  let seriesTitle = $state("");
   let category = $state("movies");
   let priority = $state<"NORMAL" | "HIGH" | "LOW">("NORMAL");
   let error = $state("");
@@ -90,26 +92,58 @@
     detectedHost = detectHost(url);
   });
 
+  $effect(() => {
+    if (seriesMode) {
+      category = "tv";
+    }
+  });
+
+  function parseDownloadUrls(input: string): string[] {
+    const urls = input
+      .split(/[\n,]+/)
+      .map((value) => unwrapFacebookRedirect(value).trim())
+      .filter(Boolean);
+
+    return Array.from(new Set(urls));
+  }
+
+  function inferSeriesTitle(): string {
+    const manualTitle = seriesTitle.trim() || filename.trim();
+    if (manualTitle) return manualTitle;
+    if (folderPreview?.folder_name) return folderPreview.folder_name;
+    return "";
+  }
+
+  function seriesFolderLabel(): string {
+    return inferSeriesTitle() || "Tự nhận diện từ tên file/link";
+  }
+
   // Validate URL
   function validateUrl(urlString: string): boolean {
-    if (!urlString.trim()) {
-      error = "URL is required";
+    const urls = parseDownloadUrls(urlString);
+    if (!urls.length) {
+      error = seriesMode ? "Cần nhập ít nhất 1 link tập phim" : "URL is required";
       return false;
     }
 
-    const normalized = unwrapFacebookRedirect(urlString);
-
-    try {
-      new URL(normalized);
-    } catch {
-      error = "Invalid URL format";
+    if (urls.length > 1 && !seriesMode) {
+      error = "Muốn nhập nhiều link cùng lúc thì bật chế độ Film bộ trước";
       return false;
     }
 
-    const host = detectHost(urlString);
-    if (host === "Unknown" || host === "") {
-      error = "Unsupported host. Currently supported: Fshare";
-      return false;
+    for (const normalized of urls) {
+      try {
+        new URL(normalized);
+      } catch {
+        error = `Invalid URL format: ${normalized}`;
+        return false;
+      }
+
+      const host = detectHost(normalized);
+      if (host === "Unknown" || host === "") {
+        error = "Unsupported host. Currently supported: Fshare";
+        return false;
+      }
     }
 
     return true;
@@ -146,24 +180,33 @@
     error = "";
 
     try {
-      const request: AddDownloadRequest = {
-        url: unwrapFacebookRedirect(url),
-        category: category || undefined,
-        priority: priority,
-      };
+      const urls = parseDownloadUrls(url);
+      const batchId = seriesMode ? crypto.randomUUID() : undefined;
+      const folderName = seriesMode ? inferSeriesTitle() || undefined : undefined;
 
-      if (filename.trim()) {
-        request.filename = filename.trim();
+      for (const [index, downloadUrl] of urls.entries()) {
+        const request: AddDownloadRequest = {
+          url: downloadUrl,
+          category: category || undefined,
+          priority: priority,
+          batch_id: batchId,
+          batch_name: folderName,
+          folder_name: folderName,
+        };
+
+        if (filename.trim() && urls.length === 1) {
+          request.filename = filename.trim();
+        }
+
+        const response = await downloadStore.addDownload(request);
+
+        if (!response.success) {
+          throw new Error(response.error || `Failed to add download #${index + 1}`);
+        }
       }
 
-      const response = await downloadStore.addDownload(request);
-
-      if (response.success) {
-        closeModal();
-        resetForm();
-      } else {
-        error = response.error || "Failed to add download";
-      }
+      closeModal();
+      resetForm();
     } catch (e: any) {
       error = e.message || "An unexpected error occurred";
     } finally {
@@ -179,7 +222,7 @@
 
     try {
       const batchId = crypto.randomUUID();
-      const batchName = folderPreview.folder_name;
+      const batchName = seriesMode ? inferSeriesTitle() : folderPreview.folder_name;
 
       for (const item of targetItems) {
         const response = await downloadStore.addDownload({
@@ -189,6 +232,7 @@
           priority,
           batch_id: batchId,
           batch_name: batchName,
+          folder_name: seriesMode ? batchName : undefined,
         });
 
         if (!response.success) {
@@ -220,9 +264,11 @@
 
     requestDownloadConfirm({
       mode: "single",
-      title: "Start this download?",
-      subtitle: `${filename.trim() || "Fshare file"}${category ? ` • ${category}` : ""}`,
-      count: 1,
+      title: seriesMode ? "Start series downloads?" : "Start this download?",
+      subtitle: seriesMode
+        ? `${parseDownloadUrls(url).length} tập • thư mục: ${seriesFolderLabel()}`
+        : `${filename.trim() || "Fshare file"}${category ? ` • ${category}` : ""}`,
+      count: parseDownloadUrls(url).length,
       items: [],
     });
   }
@@ -330,6 +376,8 @@
   function resetForm() {
     url = "";
     filename = "";
+    seriesMode = false;
+    seriesTitle = "";
     category = "movies";
     priority = "NORMAL";
     error = "";
@@ -387,15 +435,27 @@
           <span class="label-text">URL</span>
           <span class="required">*</span>
         </label>
-        <input
-          id="download-url"
-          type="url"
-          bind:value={url}
-          placeholder="https://fshare.vn/file/... hoặc /folder/..."
-          required
-          disabled={isSubmitting || previewingFolder}
-          autocomplete="off"
-        />
+        {#if seriesMode}
+          <textarea
+            id="download-url"
+            bind:value={url}
+            placeholder="Dán nhiều link tập phim, mỗi dòng 1 link"
+            required
+            disabled={isSubmitting || previewingFolder}
+            autocomplete="off"
+            rows="5"
+          ></textarea>
+        {:else}
+          <input
+            id="download-url"
+            type="url"
+            bind:value={url}
+            placeholder="https://fshare.vn/file/... hoặc /folder/..."
+            required
+            disabled={isSubmitting || previewingFolder}
+            autocomplete="off"
+          />
+        {/if}
         {#if detectedHost}
           <Badge
             text={detectedHost}
@@ -405,21 +465,47 @@
         {/if}
       </div>
 
-      <div class="form-group">
-        <label for="download-filename">
-          <span class="label-text">Filename</span>
-          <span class="optional">(optional)</span>
-        </label>
-        <input
-          id="download-filename"
-          type="text"
-          bind:value={filename}
-          placeholder="movie.mkv"
-          disabled={isSubmitting}
-          autocomplete="off"
-        />
-        <div class="hint">Leave empty to use original filename</div>
-      </div>
+      <label class="series-toggle">
+        <input type="checkbox" bind:checked={seriesMode} disabled={isSubmitting || previewingFolder} />
+        <span class="series-toggle-copy">
+          <strong>Film bộ</strong>
+          <em>Chọn nhiều link và lưu chung vào thư mục tên phim</em>
+        </span>
+      </label>
+
+      {#if seriesMode}
+        <div class="form-group">
+          <label for="series-title">
+            <span class="label-text">Tên film bộ</span>
+            <span class="optional">(optional)</span>
+          </label>
+          <input
+            id="series-title"
+            type="text"
+            bind:value={seriesTitle}
+            placeholder="Để trống để tự lấy từ tên file/link"
+            disabled={isSubmitting}
+            autocomplete="off"
+          />
+          <div class="hint">Để trống FHub sẽ tự đoán từ tên file FShare; hệ thống cũng lưu log map link → thư mục.</div>
+        </div>
+      {:else}
+        <div class="form-group">
+          <label for="download-filename">
+            <span class="label-text">Filename</span>
+            <span class="optional">(optional)</span>
+          </label>
+          <input
+            id="download-filename"
+            type="text"
+            bind:value={filename}
+            placeholder="movie.mkv"
+            disabled={isSubmitting}
+            autocomplete="off"
+          />
+          <div class="hint">Leave empty to use original filename</div>
+        </div>
+      {/if}
 
       {#if isFshareFolderUrl(url)}
         <label class="recursive-toggle">
@@ -668,13 +754,15 @@
   }
 
   input,
-  select {
+  select,
+  textarea {
     background: rgba(0, 0, 0, 0.6);
     border: 1px solid rgba(255, 255, 255, 0.1);
     padding: 0.8rem 1.2rem;
     color: var(--text-primary, #fff);
     font-size: 0.875rem;
     font-family: var(--font-mono, monospace);
+    resize: vertical;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     clip-path: polygon(
       0% 0%,
@@ -687,7 +775,8 @@
   }
 
   input:focus,
-  select:focus {
+  select:focus,
+  textarea:focus {
     outline: none;
     border-color: var(--color-primary, #ff8a1f);
     background: rgba(255, 138, 31, 0.05);
@@ -735,15 +824,37 @@
     overflow: auto;
   }
 
-  .recursive-toggle {
+  .recursive-toggle,
+  .series-toggle {
     display: flex;
     align-items: center;
-    gap: 0.6rem;
+    gap: 0.7rem;
     font-size: 0.85rem;
     color: #d8e2f0;
   }
 
-  .recursive-toggle input {
+  .series-toggle {
+    padding: 0.8rem;
+    border: 1px solid rgba(255, 138, 31, 0.2);
+    background: rgba(255, 138, 31, 0.06);
+    border-radius: 12px;
+  }
+
+  .series-toggle-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+
+  .series-toggle-copy em {
+    color: var(--text-muted, #888);
+    font-size: 0.72rem;
+    font-style: normal;
+    font-weight: 600;
+  }
+
+  .recursive-toggle input,
+  .series-toggle input {
     width: 16px;
     height: 16px;
     margin: 0;

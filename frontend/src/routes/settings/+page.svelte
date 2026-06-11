@@ -149,7 +149,11 @@
   let checkingUpdate = $state(false);
   let updatingApp = $state(false);
   let updateMessage = $state("");
+  let updateCommandCopied = $state(false);
   let showUpdateConfirm = $state(false);
+
+  const manualUpdateCommand = "docker compose pull && docker compose up -d";
+  const watchtowerCommand = "docker compose -f docker-compose.auto-update.yml up -d";
 
   const activeUsers = $derived(users.filter((user) => user.is_active).length);
   const adminUsers = $derived(users.filter((user) => user.role === "admin").length);
@@ -298,9 +302,21 @@
     }
   }
 
+  async function copyUpdateCommand(command = manualUpdateCommand) {
+    try {
+      await navigator.clipboard.writeText(command);
+      updateCommandCopied = true;
+      updateMessage = "Đã copy lệnh update. Chạy trong thư mục cài FHub trên NAS.";
+      setTimeout(() => updateCommandCopied = false, 2200);
+    } catch {
+      updateMessage = `Không copy tự động được. Lệnh update: ${command}`;
+    }
+  }
+
   async function runWebUpdate() {
     if (!updateStatus?.updater_available) {
-      updateMessage = "Bản cài này chưa bật web updater. Thêm /var/run/docker.sock vào docker-compose.yml rồi restart FHub một lần.";
+      updateMessage = "Bản cài này không có quyền update trực tiếp. Copy lệnh update hoặc bật auto-update bằng Watchtower.";
+      await copyUpdateCommand();
       return;
     }
     showUpdateConfirm = true;
@@ -313,7 +329,10 @@
     try {
       const response = await fetch("/api/update/run", { method: "POST", credentials: "include" });
       const result = response.ok ? await response.json() : { success: false, message: await response.text() };
-      updateMessage = result.message || (result.success ? "Đã bắt đầu cập nhật." : "Cập nhật thất bại.");
+      const rawMessage = result.message || (result.success ? "Đã bắt đầu cập nhật." : "Cập nhật thất bại.");
+      updateMessage = /permission denied|docker socket|var\/run\/docker\.sock/i.test(rawMessage)
+        ? "FHub không có quyền update trực tiếp trong container. Dùng lệnh update thủ công hoặc bật Watchtower auto-update."
+        : rawMessage;
       if (result.success) setTimeout(() => window.location.reload(), 12000);
     } catch (error) {
       updateMessage = error instanceof Error ? error.message : "Không chạy được cập nhật.";
@@ -546,13 +565,22 @@
         <small>Hiện tại: {updateStatus?.current_commit || updateStatus?.current_version || "không rõ"} · Mới nhất: {updateStatus?.latest_commit || "đang kiểm tra"}</small>
         {#if updateMessage}<p>{updateMessage}</p>{/if}
         {#if updateStatus && !updateStatus.updater_available}
-          <p class="update-warning">Muốn bấm update trực tiếp trên web, thêm <code>/var/run/docker.sock:/var/run/docker.sock</code> vào volumes rồi restart FHub một lần.</p>
+          <p class="update-warning">Bản cài này không có quyền update trực tiếp. Cách ít lỗi nhất: copy lệnh update hoặc bật Watchtower auto-update.</p>
+          <div class="update-command-box">
+            <code>{manualUpdateCommand}</code>
+            <button type="button" onclick={() => copyUpdateCommand()}>{updateCommandCopied ? "Đã copy" : "Copy"}</button>
+          </div>
+          <p class="update-hint">Muốn tự động cập nhật như app nền: chạy <code>{watchtowerCommand}</code> một lần để bật Watchtower.</p>
         {/if}
       </div>
       <div class="update-actions">
         <button type="button" class="ghost-button" onclick={checkUpdateStatus} disabled={checkingUpdate}>{checkingUpdate ? "Đang check..." : "Check update"}</button>
         {#if updateStatus?.update_available}
-          <button type="button" class="primary-button update-now" onclick={runWebUpdate} disabled={updatingApp || !updateStatus.updater_available}>{updatingApp ? "Đang update..." : "Update now"}</button>
+          {#if updateStatus.updater_available}
+            <button type="button" class="primary-button update-now" onclick={runWebUpdate} disabled={updatingApp}>{updatingApp ? "Đang update..." : "Update"}</button>
+          {:else}
+            <button type="button" class="primary-button update-now" onclick={() => copyUpdateCommand()}>{updateCommandCopied ? "Đã copy" : "Copy lệnh update"}</button>
+          {/if}
         {/if}
       </div>
     </section>
@@ -892,7 +920,11 @@
   .update-copy strong { color: #fff; font-size: 1rem; }
   .update-copy small { margin-top: .18rem; color: rgba(226,232,240,.68); font-weight: 850; }
   .update-copy p { margin-top: .32rem; color: rgba(226,232,240,.62); font-size: .82rem; line-height: 1.35; }
-  .update-warning code { padding: .08rem .28rem; border-radius: 6px; background: rgba(0,0,0,.32); color: #fde68a; }
+  .update-warning code, .update-hint code { padding: .08rem .28rem; border-radius: 6px; background: rgba(0,0,0,.32); color: #fde68a; }
+  .update-command-box { margin-top: .55rem; display: grid; grid-template-columns: minmax(0,1fr) auto; gap: .45rem; align-items: center; max-width: 560px; padding: .42rem; border: 1px solid rgba(148,163,184,.14); border-radius: 12px; background: rgba(2,6,23,.34); }
+  .update-command-box code { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #fde68a; font-size: .8rem; }
+  .update-command-box button { min-height: 34px; padding: 0 .75rem; border: 0; border-radius: 10px; color: #08111f; background: linear-gradient(135deg,#f8c14a,#c4b5fd); font-weight: 950; }
+  .update-hint { color: rgba(226,232,240,.54) !important; }
   .update-actions { display: grid; gap: .5rem; min-width: 150px; }
   .update-now { min-height: 44px; }
   .status-line { min-height: 52px; display: flex; align-items: center; padding: .9rem 1rem; border-radius: 16px; }
