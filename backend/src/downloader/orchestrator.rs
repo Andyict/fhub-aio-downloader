@@ -178,7 +178,7 @@ impl DownloadOrchestrator {
         host: String,
         category: String,
     ) -> Result<DownloadTask, anyhow::Error> {
-        self.add_download_with_metadata(url, Some(filename), host, category, None, None, None).await
+        self.add_download_with_metadata(url, Some(filename), host, category, None, None, None, None).await
     }
     
     /// Add a new download with TMDB metadata for organized folder structure
@@ -191,6 +191,7 @@ impl DownloadOrchestrator {
         mut tmdb_metadata: Option<TmdbDownloadMetadata>,
         batch_id: Option<String>,
         batch_name: Option<String>,
+        folder_name: Option<String>,
     ) -> Result<DownloadTask, anyhow::Error> {
         // === DEBUG: Log orchestrator input ===
         tracing::info!("=== [ORCHESTRATOR] add_download_with_metadata called ===");
@@ -347,8 +348,43 @@ impl DownloadOrchestrator {
             filename.clone()
         };
         
-        // Build destination with FHub-compatible filename
-        let destination = self.build_destination_path(&final_filename, &category, &tmdb_metadata, &download_dir);
+        let inferred_series_folder = if tmdb_metadata.is_none() && folder_name.is_none() && category == "tv" {
+            let parsed = FilenameParser::parse(&filename);
+            if parsed.is_series && !parsed.title.trim().is_empty() {
+                Some(parsed.title)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        let manual_folder_name = folder_name.or(inferred_series_folder);
+
+        // Build destination with FHub-compatible filename.
+        // Manual series mode uses folder_name when TMDB metadata is not available,
+        // so every episode added with the same show title lands in one folder.
+        let destination = if tmdb_metadata.is_none() {
+            if let Some(ref folder) = manual_folder_name {
+                let clean_folder = PathBuilder::sanitize_filename(folder);
+                if !clean_folder.is_empty() {
+                    download_dir.join(clean_folder).join(&final_filename).to_string_lossy().to_string()
+                } else {
+                    self.build_destination_path(&final_filename, &category, &tmdb_metadata, &download_dir)
+                }
+            } else {
+                self.build_destination_path(&final_filename, &category, &tmdb_metadata, &download_dir)
+            }
+        } else {
+            self.build_destination_path(&final_filename, &category, &tmdb_metadata, &download_dir)
+        };
+
+        if let Some(ref folder) = manual_folder_name {
+            if let Some(code) = &fshare_code {
+                tracing::info!("[SERIES_MAP] fshare_code={} url={} folder={} filename={}", code, url, folder, final_filename);
+            } else {
+                tracing::info!("[SERIES_MAP] url={} folder={} filename={}", url, folder, final_filename);
+            }
+        }
         
         // Create new task with file size and current runtime segment configuration
         let current_config = self.config.read().await.clone();

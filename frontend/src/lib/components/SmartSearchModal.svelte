@@ -168,6 +168,8 @@
           filename,
           category: ui.smartSearchData?.type || "other",
           tmdb: tmdbMetadata,
+          folder_name: ui.smartSearchData?.type === "tv" ? ui.smartSearchData?.title : undefined,
+          batch_name: ui.smartSearchData?.type === "tv" ? ui.smartSearchData?.title : undefined,
         }),
       });
 
@@ -530,6 +532,8 @@
                 filename: item.filename,
                 category: "tv",
                 tmdb: tmdbMetadata,
+                folder_name: ui.smartSearchData?.title || undefined,
+                batch_name: ui.smartSearchData?.title || undefined,
               }),
             });
           }),

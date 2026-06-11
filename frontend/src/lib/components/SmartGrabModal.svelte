@@ -493,6 +493,7 @@
                 tmdb: tmdbMetadata,
                 batch_id: batchId,
                 batch_name: batchName,
+                folder_name: batchName,
               }),
             });
           }),

@@ -97,7 +97,10 @@
   let fshareLinks = $state<FshareResult[]>([]);
   let selectedFilm = $state<DiscoverItem | null>(null);
   let selectedLinks = $state<FshareResult[]>([]);
+  let selectedDownloadUrls = $state<string[]>([]);
   let selectedLinkIndex = $state<number | null>(null);
+  let seriesMode = $state(false);
+  let showSeriesHelp = $state(false);
   let selectedCast = $state<CastMember[]>([]);
   let relatedFilms = $state<RelatedFilm[]>([]);
   let loadingMeta = $state(false);
@@ -107,6 +110,7 @@
   let addedLinkUrls = $state<string[]>([]);
   let linkErrors = $state<Record<string, string>>({});
   let confirmDownloadLink = $state<FshareResult | null>(null);
+  let confirmDownloadLinks = $state<FshareResult[]>([]);
   let showDownloadConfirm = $state(false);
   let showTrailerModal = $state(false);
   let selectedTrailerKey = $state<string | null>(null);
@@ -706,6 +710,7 @@
     overviewExpanded = false;
     setSelectedImages(item.img ? [item.img] : []);
     selectedLinks = [];
+    selectedDownloadUrls = [];
     selectedLinkIndex = null;
     selectedCast = [];
     relatedFilms = [];
@@ -1014,7 +1019,9 @@
       } else {
         selectedLinks = filterRelevantLinks(rawLinks);
       }
-      selectedLinkIndex = selectedLinks.length ? 0 : null;
+      selectedLinkIndex = null;
+      selectedDownloadUrls = selectedLinks.map((link) => link.url || "").filter(Boolean);
+      seriesMode = selectedLinks.length > 1 || selectedFilm?.type === "TV";
       const removed = rawLinks.length - selectedLinks.length;
       message = selectedLinks.length
         ? `${usedExactSource ? "Đã lấy link từ đúng nguồn phim" : "Tìm thấy"} ${selectedLinks.length} bản tải${removed > 0 ? `, đã lọc ${removed} link lệch/trùng.` : "."}`
@@ -1023,6 +1030,7 @@
       const msg = error instanceof Error ? error.message : "Không tải được link liên quan";
       message = msg;
       selectedLinks = [];
+      selectedDownloadUrls = [];
       selectedLinkIndex = null;
     } finally {
       loadingLinks = false;
@@ -1035,19 +1043,57 @@
       return;
     }
     confirmDownloadLink = link;
+    confirmDownloadLinks = [];
     showDownloadConfirm = true;
-    message = "Kiểm tra thông tin rồi bấm Download để xác nhận thêm vào queue.";
+    message = "Kiểm tra thông tin rồi bấm Download để xác nhận tải vào NAS.";
   }
 
   function closeDownloadConfirm() {
     showDownloadConfirm = false;
     confirmDownloadLink = null;
+    confirmDownloadLinks = [];
   }
 
   async function confirmRelatedDownload() {
+    if (confirmDownloadLinks.length) {
+      const links = confirmDownloadLinks;
+      for (const link of links) {
+        if (!addedLinkUrls.includes(link.url || "")) await addRelatedDownload(link);
+      }
+      const hasError = links.some((link) => link.url && linkErrors[link.url]);
+      if (!hasError) closeDownloadConfirm();
+      return;
+    }
     if (!confirmDownloadLink) return;
     await addRelatedDownload(confirmDownloadLink);
     if (!linkErrors[confirmDownloadLink.url || ""]) closeDownloadConfirm();
+  }
+
+  function toggleSelectedDownload(link: FshareResult) {
+    if (!link.url) return;
+    selectedDownloadUrls = selectedDownloadUrls.includes(link.url)
+      ? selectedDownloadUrls.filter((url) => url !== link.url)
+      : [...selectedDownloadUrls, link.url];
+  }
+
+  function selectAllDownloads() {
+    selectedDownloadUrls = selectedLinks.map((link) => link.url || "").filter(Boolean);
+  }
+
+  function clearSelectedDownloads() {
+    selectedDownloadUrls = [];
+  }
+
+  function openSelectedDownloadConfirm() {
+    const links = selectedLinks.filter((link) => link.url && selectedDownloadUrls.includes(link.url));
+    if (!links.length) {
+      message = "Chưa chọn tập nào để tải xuống.";
+      return;
+    }
+    confirmDownloadLinks = links;
+    confirmDownloadLink = links[0] ?? null;
+    showDownloadConfirm = true;
+    message = `Kiểm tra ${links.length} tập rồi bấm Download để xác nhận tải vào NAS.`;
   }
 
   async function addRelatedDownload(link: FshareResult) {
@@ -1088,10 +1134,11 @@
         body: JSON.stringify({
           url: item.url,
           filename: item.name,
-          category,
+          category: seriesMode ? "tv" : category,
           priority: "NORMAL",
           batch_id: batchId,
           batch_name: batchName,
+          folder_name: seriesMode ? batchName : undefined,
           tmdb: selectedFilm?.id ? {
             tmdb_id: selectedFilm.id,
             media_type: selectedFilm.type === "TV" ? "tv" : "movie",
@@ -1328,18 +1375,39 @@
         {#if loadingLinks}
           <div class="download-empty">Đang quét danh sách bản phim liên quan...</div>
         {:else if selectedLinks.length}
+          <div class="download-bulk-panel" class:series={seriesMode}>
+            <div class="bulk-actions">
+              <strong>{selectedDownloadUrls.length}/{selectedLinks.length} tập đã chọn</strong>
+              <button type="button" onclick={selectAllDownloads}>Chọn hết</button>
+              <button type="button" onclick={clearSelectedDownloads}>Bỏ chọn</button>
+            </div>
+            <div class="mode-line">
+              <button type="button" class:active={!seriesMode} onclick={() => (seriesMode = false)}>Phim lẻ</button>
+              <button type="button" class:active={seriesMode} onclick={() => (seriesMode = true)}>Phim bộ</button>
+              <button type="button" class="help-dot" aria-expanded={showSeriesHelp} onclick={() => (showSeriesHelp = !showSeriesHelp)}>!</button>
+            </div>
+            {#if showSeriesHelp}
+              <p class="series-help"><b>Phim bộ</b> sẽ gom các tập vào cùng thư mục: {selectedFilm?.title || "tự nhận diện"}. <b>Phim lẻ</b> tải từng file riêng.</p>
+            {/if}
+            <button type="button" class="bulk-download-btn" disabled={!selectedDownloadUrls.length || !!addingLinkUrl} onclick={openSelectedDownloadConfirm}>{addingLinkUrl ? "Đang tải..." : `Tải ${selectedDownloadUrls.length} tập đã chọn`}</button>
+          </div>
           <div class="download-list">
             {#each selectedLinks as link, index}
               <article class="download-row" class:open={selectedLinkIndex === index} class:added={addedLinkUrls.includes(link.url || "")}>
-                <button class="download-toggle" type="button" onclick={() => selectedLinkIndex = selectedLinkIndex === index ? null : index}>
-                  <span class="material-icons">{addedLinkUrls.includes(link.url || "") ? "check_circle" : "movie"}</span>
-                  <div>
-                    <strong>{displayDownloadTitle(link)}</strong>
-                    <small>{episodeLabelFromName(link.original_name || link.name) || "Chưa rõ tập"} · {link.quality || link.resolution || link.source || "Chưa rõ chất lượng"} · {formatSize(link.size)}</small>
-                  </div>
-                  {#if addedLinkUrls.includes(link.url || "")}<span class="download-status-badge">Đã thêm</span>{/if}
-                  <span class="material-icons">{selectedLinkIndex === index ? "expand_less" : "expand_more"}</span>
-                </button>
+                <div class="download-toggle-row">
+                  <label class="download-check" aria-label="Chọn tập tải">
+                    <input type="checkbox" checked={!!link.url && selectedDownloadUrls.includes(link.url)} onchange={() => toggleSelectedDownload(link)} />
+                    <span class="select-box"><span class="material-icons">check</span></span>
+                  </label>
+                  <button class="download-toggle" type="button" onclick={() => selectedLinkIndex = selectedLinkIndex === index ? null : index}>
+                    <div>
+                      <strong>{displayDownloadTitle(link)}</strong>
+                      <small>{episodeLabelFromName(link.original_name || link.name) || "Chưa rõ tập"} · {link.quality || link.resolution || link.source || "Chưa rõ chất lượng"} · {formatSize(link.size)}</small>
+                    </div>
+                    {#if addedLinkUrls.includes(link.url || "")}<span class="download-status-badge">Đã thêm</span>{/if}
+                    <span class="material-icons">{selectedLinkIndex === index ? "expand_less" : "expand_more"}</span>
+                  </button>
+                </div>
               </article>
               {#if selectedLinkIndex === index}
                 <div class="download-detail download-detail-row" role="button" tabindex="0" onclick={() => selectedLinkIndex = null} onkeydown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); selectedLinkIndex = null; } }} aria-label="Thu gọn thông tin tập">
@@ -1351,7 +1419,7 @@
                   </div>
                   <div class="download-actions">
                     <button type="button" disabled={addingLinkUrl === link.url || addedLinkUrls.includes(link.url || "")} class:added={addedLinkUrls.includes(link.url || "")} onclick={(event) => { event.stopPropagation(); openDownloadConfirm(link); }}>
-                      {addingLinkUrl === link.url ? "Đang thêm..." : addedLinkUrls.includes(link.url || "") ? "Đã thêm" : "Thêm vào tải xuống"}
+                      {addingLinkUrl === link.url ? "Đang thêm..." : addedLinkUrls.includes(link.url || "") ? "Đã thêm" : "Thêm riêng tập này"}
                     </button>
                   </div>
                   {#if link.url && linkErrors[link.url]}<p class="download-error">{linkErrors[link.url]}</p>{/if}
@@ -1473,23 +1541,41 @@
   </div>
 {/if}
 
-{#if showDownloadConfirm && confirmDownloadLink}
+{#if showDownloadConfirm && (confirmDownloadLink || confirmDownloadLinks.length)}
   <div class="confirm-backdrop" role="presentation">
     <div class="confirm-modal compact" role="dialog" aria-modal="true" aria-label="Xác nhận download">
       <div class="confirm-top">
         <span class="material-icons modal-icon">download_for_offline</span>
-        <div><h2>Xác nhận download?</h2><p>1 bản tải sẽ được thêm vào queue NAS.</p></div>
+        <div>
+          <h2>Xác nhận download?</h2>
+          <p>{confirmDownloadLinks.length ? `${confirmDownloadLinks.length} tập sẽ được tải vào queue NAS.` : "1 bản tải sẽ được tải vào queue NAS."}</p>
+        </div>
       </div>
-      <div class="confirm-file-list" aria-label="File sẽ download">
-        <strong title={confirmDownloadLink.original_name || confirmDownloadLink.name}>{confirmDownloadLink.original_name || confirmDownloadLink.name || "Bản tải FShare"}</strong>
-      </div>
-      <div class="confirm-box"><span>Dung lượng</span><strong>{formatSize(confirmDownloadLink.size)}</strong></div>
-      <div class="confirm-box"><span>Chất lượng</span><strong>{confirmDownloadLink.quality || confirmDownloadLink.resolution || confirmDownloadLink.source || "—"}</strong></div>
+      {#if confirmDownloadLinks.length}
+        <div class="confirm-file-list multi" aria-label="Các file sẽ download">
+          {#each confirmDownloadLinks.slice(0, 5) as link}
+            <strong title={link.original_name || link.name}>{link.original_name || link.name || "Bản tải FShare"}</strong>
+          {/each}
+          {#if confirmDownloadLinks.length > 5}<small>+{confirmDownloadLinks.length - 5} tập khác</small>{/if}
+        </div>
+        <div class="confirm-box"><span>Số tập</span><strong>{confirmDownloadLinks.length}</strong></div>
+        <div class="confirm-box"><span>Chế độ</span><strong>{seriesMode ? "Phim bộ" : "Phim lẻ"}</strong></div>
+      {:else if confirmDownloadLink}
+        <div class="confirm-file-list" aria-label="File sẽ download">
+          <strong title={confirmDownloadLink.original_name || confirmDownloadLink.name}>{confirmDownloadLink.original_name || confirmDownloadLink.name || "Bản tải FShare"}</strong>
+        </div>
+        <div class="confirm-box"><span>Dung lượng</span><strong>{formatSize(confirmDownloadLink.size)}</strong></div>
+        <div class="confirm-box"><span>Chất lượng</span><strong>{confirmDownloadLink.quality || confirmDownloadLink.resolution || confirmDownloadLink.source || "—"}</strong></div>
+      {/if}
       <div class="modal-actions">
         <button type="button" onclick={closeDownloadConfirm}>Hủy</button>
         <button type="button" class="danger-confirm" onclick={() => void confirmRelatedDownload()} disabled={!!addingLinkUrl}>{addingLinkUrl ? "Đang gửi vào NAS..." : "Download"}</button>
       </div>
-      {#if confirmDownloadLink.url && linkErrors[confirmDownloadLink.url]}<p class="download-error">{linkErrors[confirmDownloadLink.url]}</p>{/if}
+      {#if confirmDownloadLinks.length}
+        {#each confirmDownloadLinks.filter((link) => link.url && linkErrors[link.url]) as link}
+          <p class="download-error">{linkErrors[link.url || ""]}</p>
+        {/each}
+      {:else if confirmDownloadLink?.url && linkErrors[confirmDownloadLink.url]}<p class="download-error">{linkErrors[confirmDownloadLink.url]}</p>{/if}
     </div>
   </div>
 {/if}
@@ -1651,7 +1737,7 @@
   .related-head { display: flex; align-items: center; justify-content: space-between; gap: .7rem; }
   .related-head h3 { margin-top: .15rem; font-size: 1.15rem; }
   .related-head > span { padding: .32rem .58rem; border-radius: 999px; color: #111827; background: #f8c14a; font-size: .78rem; font-weight: 950; white-space: nowrap; }
-  .download-list { min-height: 0; display: grid; align-content: start; gap: .5rem; max-height: 410px; overflow-y: auto; overflow-x: hidden; padding: 0 .28rem .2rem 0; overscroll-behavior: contain; scrollbar-width: thin; }
+  .download-list { min-height: 0; display: grid; align-content: start; gap: .5rem; max-height: none; overflow-y: auto; overflow-x: hidden; padding: 0 .28rem .2rem 0; overscroll-behavior: contain; scrollbar-width: thin; }
   .download-list::-webkit-scrollbar { width: 8px; }
   .download-list::-webkit-scrollbar-thumb { border-radius: 999px; background: rgba(248,193,74,.38); }
   .download-list::-webkit-scrollbar-track { background: rgba(255,255,255,.04); border-radius: 999px; }
@@ -1665,7 +1751,7 @@
   .download-row.open { min-height: 0; border-color: rgba(248,193,74,.34); background: rgba(248,193,74,.055); }
   .download-row.added { border-color: rgba(34,197,94,.42); background: rgba(34,197,94,.075); }
   .download-row.added .download-toggle .material-icons:first-child { background: linear-gradient(135deg,#bbf7d0,#22c55e); }
-  .download-detail { display: grid; gap: .5rem; margin: -.28rem 0 .08rem 0; padding: .64rem .72rem; border: 1px solid rgba(248,193,74,.16); border-radius: 12px; color: rgba(226,232,240,.78); background: rgba(2,6,23,.62); box-shadow: inset 0 1px 0 rgba(255,255,255,.04); cursor: pointer; }
+  .download-detail { display: grid; gap: .5rem; margin: .4rem 0 .08rem 0; padding: .64rem .72rem; border: 1px solid rgba(248,193,74,.16); border-radius: 12px; color: rgba(226,232,240,.78); background: rgba(2,6,23,.62); box-shadow: inset 0 1px 0 rgba(255,255,255,.04); cursor: pointer; }
   .download-detail-row { scroll-margin: .5rem; }
   .download-detail p { margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: rgba(248,250,252,.86); font-size: .78rem; }
   .download-tags { display: flex; flex-wrap: wrap; gap: .34rem; }
@@ -1858,5 +1944,31 @@
     .mobile-link-search-top .check-link-button:disabled { opacity: .45; }
     .mobile-link-search-top .check-link-button .material-icons { color: #080a12; font-size: 1.22rem; }
   }
+
+
+  .download-bulk-panel{display:grid;gap:.48rem;margin:0 0 .6rem 0;padding:.62rem;border:1px solid rgba(248,193,74,.22);border-radius:14px;background:rgba(248,193,74,.06);position:relative;z-index:2}
+  .bulk-actions{display:flex;align-items:center;gap:.42rem;flex-wrap:wrap}.bulk-actions strong{color:#fff;font-size:.82rem;margin-right:auto}.bulk-actions button{min-height:30px;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);color:#e5e7eb;font-size:.72rem;font-weight:900;padding:0 .55rem}
+  .mode-line{display:grid;grid-template-columns:1fr 1fr 32px;gap:.32rem}.mode-line button{min-height:36px;border-radius:11px;border:1px solid rgba(255,255,255,.12);background:rgba(2,6,23,.5);color:#cbd5e1;font-weight:950}.mode-line button.active{color:#111827;background:linear-gradient(135deg,#f8c14a,#fb7185);border-color:transparent}.mode-line .help-dot{color:#f8c14a;background:rgba(248,193,74,.12)}
+  .series-help{margin:0;padding:.5rem .58rem;border-radius:11px;background:rgba(56,189,248,.08);color:#cfe8ff;font-size:.72rem;line-height:1.35}.series-help b{color:#fde68a}
+  .bulk-download-btn{min-height:40px;border:0;border-radius:12px;background:linear-gradient(135deg,#f8c14a,#fb7185);color:#111827;font-weight:1000}.bulk-download-btn:disabled{opacity:.58}
+  .download-toggle-row{display:grid;grid-template-columns:38px minmax(0,1fr);align-items:stretch}.download-check{display:grid;place-items:center;cursor:pointer}.download-check input{position:absolute;opacity:0;pointer-events:none}.download-check .material-icons{width:30px;height:30px;display:grid;place-items:center;border-radius:10px;color:#111827;background:linear-gradient(135deg,#f8c14a,#fb7185);font-size:1rem}.download-check input:checked + .material-icons{background:linear-gradient(135deg,#86efac,#22c55e)}
+  .download-toggle{grid-template-columns:minmax(0,1fr) auto 24px!important}
+  @media(max-width:720px){.related-downloads{grid-template-rows:auto auto minmax(0,1fr);max-height:560px}.download-bulk-panel{padding:.5rem;border-radius:12px}.bulk-actions{gap:.3rem}.bulk-actions strong{flex:1 1 100%;font-size:.78rem}.bulk-actions button{min-height:28px;font-size:.68rem;padding:0 .5rem}.mode-line{grid-template-columns:1fr 1fr 30px}.mode-line button{min-height:32px;font-size:.76rem}.bulk-download-btn{min-height:36px;font-size:.82rem}.download-toggle-row{grid-template-columns:36px minmax(0,1fr)}.download-toggle{grid-template-columns:minmax(0,1fr) 22px!important}.download-status-badge{display:none}.download-detail{margin:.36rem 0 .08rem 0}}
+
+
+/* Discovery bulk download layout hard override */
+.related-downloads{display:flex!important;flex-direction:column!important;grid-template-rows:none!important;max-height:560px!important;overflow:hidden!important}
+.related-downloads>.related-head{flex:0 0 auto!important}
+.related-downloads>.download-bulk-panel{flex:0 0 auto!important;order:2!important;margin:.1rem 0 .35rem!important;z-index:5!important}
+.related-downloads>.download-list{flex:1 1 auto!important;min-height:0!important;max-height:none!important;order:3!important;overflow-y:auto!important;position:relative!important;z-index:1!important}
+.download-row{position:relative!important;z-index:1!important}
+.download-toggle-row{display:grid!important;grid-template-columns:42px minmax(0,1fr)!important;align-items:center!important}
+.download-check{height:100%!important;min-height:54px!important;display:grid!important;place-items:center!important}
+.download-check .select-box{width:24px!important;height:24px!important;display:grid!important;place-items:center!important;border-radius:8px!important;border:2px solid rgba(248,193,74,.72)!important;background:rgba(2,6,23,.78)!important;color:transparent!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.08)!important}
+.download-check input:checked + .select-box{border-color:transparent!important;background:linear-gradient(135deg,#86efac,#22c55e)!important;color:#052e16!important}
+.download-check .select-box .material-icons{font-size:16px!important;line-height:1!important;background:transparent!important;color:inherit!important;width:auto!important;height:auto!important;border-radius:0!important}
+.download-toggle{grid-template-columns:minmax(0,1fr) auto 24px!important}
+.download-detail{margin:.42rem 0 .08rem 42px!important}
+@media(max-width:720px){.related-downloads{max-height:580px!important}.download-bulk-panel{padding:.48rem!important}.download-toggle-row{grid-template-columns:38px minmax(0,1fr)!important}.download-check .select-box{width:22px!important;height:22px!important}.download-detail{margin:.38rem 0 .08rem 38px!important}.download-toggle{grid-template-columns:minmax(0,1fr) 22px!important}.download-status-badge{display:none!important}}
 
 </style>

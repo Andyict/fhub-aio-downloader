@@ -84,10 +84,14 @@
   let pendingDownloadName = $state("");
   let pendingDownloadSize = $state(0);
   let recursive = $state(true);
+  let seriesMode = $state(false);
   let showDownloadConfirm = $state(false);
   let confirmTapInProgress = $state(false);
+  type LinkHistoryEntry = { url: string; title?: string };
+
   let showLinkHistory = $state(false);
-  let linkHistory = $state<string[]>([]);
+  let linkHistory = $state<LinkHistoryEntry[]>([]);
+  let showDownloadModeHelp = $state(false);
   let bannerCache = $state<Record<string, string>>({});
   let detailCache = $state<Record<string, { viTitle?: string; runtime?: number }>>({});
 
@@ -107,7 +111,7 @@
 
   const filtered = $derived(activeTab === "all" ? downloads : downloads.filter((item) => item.state === activeTab));
   const activeSpeed = $derived(formatBytes(stats.total_speed ?? downloads.reduce((sum, item) => sum + parseSpeed(item.speed), 0)) + "/s");
-  const downloadablePreviewItems = $derived((preview?.items || []).filter((item) => !item.is_directory));
+  const downloadablePreviewItems = $derived(sortPreviewItems((preview?.items || []).filter((item) => !item.is_directory)));
   const selectedPreviewItems = $derived(downloadablePreviewItems.filter((item) => selectedUrls.has(item.url)));
   const selectedPreviewSize = $derived(selectedPreviewItems.reduce((sum, item) => sum + (item.size || 0), 0));
   const confirmLabels = $derived(language === "vi" ? {
@@ -185,20 +189,58 @@
   function loadLinkHistory() {
     try {
       const saved = JSON.parse(localStorage.getItem("fhub-link-history") || "[]");
-      linkHistory = Array.isArray(saved) ? saved.filter((item) => typeof item === "string").slice(0, 12) : [];
+      linkHistory = Array.isArray(saved)
+        ? saved
+            .map((item): LinkHistoryEntry | null => {
+              if (typeof item === "string") return { url: item };
+              if (item && typeof item.url === "string") return { url: item.url, title: typeof item.title === "string" ? item.title : undefined };
+              return null;
+            })
+            .filter((item): item is LinkHistoryEntry => !!item?.url)
+            .slice(0, 12)
+        : [];
     } catch {
       linkHistory = [];
     }
   }
 
-  function rememberLink(url: string) {
+  function rememberLink(url: string, title?: string) {
     const clean = url.trim();
     if (!clean) return;
-    linkHistory = [clean, ...linkHistory.filter((item) => item !== clean)].slice(0, 12);
+    const cleanTitle = title?.trim();
+    linkHistory = [{ url: clean, title: cleanTitle || existingHistoryTitle(clean) }, ...linkHistory.filter((item) => item.url !== clean)].slice(0, 12);
     try {
       localStorage.setItem("fhub-link-history", JSON.stringify(linkHistory));
     } catch {
       // localStorage may be unavailable.
+    }
+  }
+
+  function existingHistoryTitle(url: string) {
+    return linkHistory.find((item) => item.url === url)?.title;
+  }
+
+  function historyTitle(item: LinkHistoryEntry) {
+    return item.title || inferNameFromUrl(item.url) || "Link FShare";
+  }
+
+  function inferNameFromUrl(url: string) {
+    try {
+      const parsed = new URL(url);
+      return decodeURIComponent(parsed.pathname.split("/").filter(Boolean).pop() || "").replace(/[._-]+/g, " ");
+    } catch {
+      return url.replace(/^https?:\/\//, "").slice(0, 64);
+    }
+  }
+
+  async function copyHistoryLink(url: string, event?: Event) {
+    event?.preventDefault();
+    event?.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(url);
+      status = "Đã copy link vào clipboard.";
+    } catch {
+      status = "Không copy được link trên trình duyệt này.";
     }
   }
 
@@ -299,8 +341,12 @@
       }, 35000);
       if (!res.ok) throw new Error(await safeText(res));
       preview = await res.json();
+      rememberLink(clean, preview?.folder_name || preview?.items?.find((item) => !item.is_directory)?.name);
+      showDownloadModeHelp = false;
       selectAllPreview();
       const count = downloadablePreviewItems.length || preview?.file_count || 0;
+      const lookedLikeSeries = isFolderPreview(preview?.resolved_url) && count > 1;
+      seriesMode = lookedLikeSeries;
       status = isFolderPreview(preview?.resolved_url)
         ? `Đã check thư mục: ${count} file · ${formatBytes(preview?.total_size || selectedPreviewSize)}. Chọn file rồi xác nhận tải.`
         : `Đã check file: ${preview?.folder_name || downloadablePreviewItems[0]?.name || "FShare file"}. Xác nhận nếu muốn tải.`;
@@ -371,6 +417,7 @@
     await tick();
     const batchId = makeBatchId();
     const batchName = pendingDownloadName || itemsToDownload[0]?.name || "FShare checked link";
+    const folderName = seriesMode ? (preview?.folder_name || batchName) : undefined;
     preview = null;
     selectedUrls = new Set();
     fshareLink = "";
@@ -387,10 +434,11 @@
         body: JSON.stringify({
           url: item.url,
           filename: item.name,
-          category: "fshare",
+          category: seriesMode ? "tv" : "fshare",
           priority: "NORMAL",
           batch_id: batchId,
           batch_name: batchName,
+          folder_name: folderName,
         }),
       }, 15000)));
 
@@ -603,6 +651,30 @@
     return Math.max(0, Math.min(100, value));
   }
 
+
+  function episodeSortKey(name: string) {
+    const text = name || "";
+    const seasonEpisode = text.match(/S(\d{1,2})\s*E(\d{1,3})/i);
+    if (seasonEpisode) return Number(seasonEpisode[1]) * 10000 + Number(seasonEpisode[2]);
+
+    const episodeOnly =
+      text.match(/(?:^|[\s._-])E(?:p(?:isode)?)?[\s._-]?(\d{1,3})(?:[\s._-]|$)/i) ||
+      text.match(/(?:^|[\s._-])T(?:ập)?[\s._-]?(\d{1,3})(?:[\s._-]|$)/i) ||
+      text.match(/(?:tập|tap|episode|ep)[\s._-]*(\d{1,3})/i);
+    if (episodeOnly) return Number(episodeOnly[1]);
+
+    return Number.MAX_SAFE_INTEGER;
+  }
+
+  function sortPreviewItems(items: PreviewItem[]) {
+    return [...items].sort((a, b) => {
+      const aKey = episodeSortKey(a.name);
+      const bKey = episodeSortKey(b.name);
+      if (aKey !== bKey) return aKey - bKey;
+      return (a.name || "").localeCompare(b.name || "", undefined, { numeric: true, sensitivity: "base" });
+    });
+  }
+
   function formatBytes(value?: number | string) {
     const bytes = Number(value ?? 0);
     if (!bytes || !Number.isFinite(bytes)) return "0 B";
@@ -681,12 +753,43 @@
     {#if showLinkHistory && linkHistory.length}
       <div class="link-history-panel">
         <div class="history-head"><strong>Lịch sử link</strong><button type="button" onclick={clearLinkHistory}>Xóa</button></div>
-        {#each linkHistory as url}
-          <button type="button" class="history-item" onclick={() => pickHistoryLink(url)} title={url}>
-            <span class="material-icons">history</span>
-            <span>{url}</span>
-          </button>
+        {#each linkHistory as item}
+          <div class="history-item-row">
+            <button type="button" class="history-item" onclick={() => pickHistoryLink(item.url)} title={item.url}>
+              <span class="material-icons">history</span>
+              <span><strong>{historyTitle(item)}</strong><small>{item.url}</small></span>
+            </button>
+            <button type="button" class="history-copy" aria-label="Copy link" title="Copy link" onclick={(event) => copyHistoryLink(item.url, event)}>
+              <span class="material-icons">content_copy</span>
+            </button>
+          </div>
         {/each}
+      </div>
+    {/if}
+    {#if preview && downloadablePreviewItems.length > 1}
+      <div class="download-mode-toggle" class:series={seriesMode} class:help-open={showDownloadModeHelp} aria-label="Chọn kiểu tải">
+        <div class="mode-toggle-label">
+          <span class="material-icons">{seriesMode ? "video_library" : "movie"}</span>
+          <strong>{seriesMode ? "Phim bộ" : "Phim lẻ"}</strong>
+          <button type="button" class="mode-info-button" aria-label="Xem chú thích chế độ tải" aria-expanded={showDownloadModeHelp} onclick={() => (showDownloadModeHelp = !showDownloadModeHelp)}>!</button>
+        </div>
+        <div class="mode-switch" role="group" aria-label="Chọn phim lẻ hoặc phim bộ">
+          <span class="mode-glow" aria-hidden="true"></span>
+          <button type="button" class:active={!seriesMode} aria-pressed={!seriesMode} onclick={() => (seriesMode = false)}>
+            <span class="material-icons">movie</span><strong>Phim lẻ</strong>
+          </button>
+          <button type="button" class:active={seriesMode} aria-pressed={seriesMode} onclick={() => (seriesMode = true)}>
+            <span class="material-icons">video_library</span><strong>Phim bộ</strong>
+          </button>
+        </div>
+        {#if showDownloadModeHelp}
+          <div class="mode-help-box">
+            <strong>Chú thích chế độ tải</strong>
+            <p><b>Phim lẻ</b>: tải từng file như một phim/file riêng.</p>
+            <p><b>Phim bộ</b>: gom các tập vào cùng một thư mục theo tên phim/folder, phù hợp tải series nhiều tập.</p>
+            <p><b>Thư mục hiện tại</b>: {preview.folder_name || "tự nhận diện"}</p>
+          </div>
+        {/if}
       </div>
     {/if}
   </div>
@@ -922,5 +1025,79 @@
   .download-card.completed{grid-template-columns:78px minmax(0,1fr) 38px;}
   .download-card.completed .card-actions button{width:36px;height:36px;min-height:36px;}
 }
+
+
+  .download-mode-toggle {
+    display: grid;
+    gap: 0.72rem;
+    margin: 0.25rem 0 0.35rem;
+    padding: 0.9rem;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 22px;
+    background: radial-gradient(circle at 0 0, rgba(59, 130, 246, 0.16), transparent 38%), linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(8, 12, 22, 0.94));
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.26), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  }
+  .download-mode-toggle.series {
+    border-color: rgba(248, 193, 74, 0.32);
+    background: radial-gradient(circle at 100% 0, rgba(248, 193, 74, 0.22), transparent 38%), linear-gradient(135deg, rgba(20, 26, 42, 0.96), rgba(10, 8, 18, 0.94));
+  }
+  .mode-toggle-label { display: grid; grid-template-columns: 34px auto minmax(0, 1fr); align-items: center; gap: 0.55rem; color: #f8fafc; }
+  .mode-toggle-label > .material-icons { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 12px; color: #c7d2fe; background: rgba(99, 102, 241, 0.14); }
+  .download-mode-toggle.series .mode-toggle-label > .material-icons { color: #111827; background: linear-gradient(135deg, #f8c14a, #ff8a1f); }
+  .mode-toggle-label strong { font-size: 0.9rem; font-weight: 950; text-transform: uppercase; letter-spacing: 0.08em; white-space: nowrap; }
+  .mode-toggle-label small { min-width: 0; color: rgba(226, 232, 240, 0.68); font-size: 0.78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mode-switch { position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.28rem; padding: 0.28rem; border: 1px solid rgba(148, 163, 184, 0.18); border-radius: 18px; background: rgba(2, 6, 23, 0.54); box-shadow: inset 0 1px 8px rgba(0, 0, 0, 0.28); }
+  .mode-glow { position: absolute; inset: 0.28rem auto 0.28rem 0.28rem; width: calc(50% - 0.14rem); border-radius: 14px; background: linear-gradient(135deg, #60a5fa, #6366f1); box-shadow: 0 10px 24px rgba(96, 165, 250, 0.28); transition: transform 0.22s ease, background 0.22s ease, box-shadow 0.22s ease; }
+  .download-mode-toggle.series .mode-glow { transform: translateX(calc(100% + 0.28rem)); background: linear-gradient(135deg, #f8c14a, #ff8a1f); box-shadow: 0 10px 26px rgba(248, 193, 74, 0.3); }
+  .mode-switch button { position: relative; z-index: 1; min-height: 58px; display: flex; align-items: center; justify-content: center; gap: 0.5rem; border: 0; border-radius: 14px; background: transparent; color: rgba(226, 232, 240, 0.6); cursor: pointer; transition: color 0.18s ease, transform 0.18s ease; }
+  .mode-switch button:hover { color: #fff; transform: translateY(-1px); }
+  .mode-switch button.active { color: #07111f; }
+  .mode-switch button .material-icons { font-size: 1.2rem; }
+  .mode-switch button strong { font-size: 1rem; font-weight: 1000; }
+  @media (max-width: 560px) { .mode-toggle-label { grid-template-columns: 34px minmax(0, 1fr); } .mode-toggle-label small { grid-column: 2; } }
+
+
+  @media (max-width: 560px) {
+    .download-mode-toggle { padding: .62rem; gap: .48rem; border-radius: 16px; }
+    .mode-toggle-label { grid-template-columns: 26px minmax(0, 1fr); gap: .42rem; }
+    .mode-toggle-label > .material-icons { width: 26px; height: 26px; border-radius: 9px; font-size: 1rem; }
+    .mode-toggle-label strong { font-size: .74rem; letter-spacing: .06em; }
+    .mode-toggle-label small { grid-column: 2; font-size: .68rem; }
+    .mode-switch { padding: .2rem; gap: .2rem; border-radius: 13px; }
+    .mode-glow { inset: .2rem auto .2rem .2rem; width: calc(50% - .1rem); border-radius: 10px; }
+    .download-mode-toggle.series .mode-glow { transform: translateX(calc(100% + .2rem)); }
+    .mode-switch button { min-height: 42px; gap: .34rem; border-radius: 10px; }
+    .mode-switch button .material-icons { font-size: 1rem; }
+  }
+
+
+/* Compact collapsible download mode + rich history */
+.mode-toggle-label{grid-template-columns:30px auto minmax(0,1fr) 34px!important;}
+.mode-toggle-label>.material-icons{width:30px!important;height:30px!important;border-radius:10px!important;font-size:1.05rem!important;}
+.mode-info-button{width:34px!important;min-width:34px!important;height:34px!important;min-height:34px!important;padding:0!important;border-radius:999px!important;border:1px solid rgba(248,193,74,.38)!important;background:rgba(248,193,74,.12)!important;color:#f8c14a!important;font-weight:1000!important;font-size:1rem!important;line-height:1!important;}
+.mode-info-button:hover{background:linear-gradient(135deg,#f8c14a,#ff8a1f)!important;color:#111827!important;}
+.download-mode-toggle{padding:.62rem .68rem!important;border-radius:16px!important;gap:.5rem!important;margin:.1rem 0 .2rem!important;}
+
+.history-item-row{display:grid;grid-template-columns:minmax(0,1fr) 38px;gap:.4rem;align-items:center;}
+.history-item{grid-template-columns:24px minmax(0,1fr)!important;min-height:48px!important;}
+.history-item strong,.history-item small{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.history-item strong{color:#f8fafc;font-size:.86rem;}
+.history-item small{color:#8ea0b5;font-size:.68rem;margin-top:.08rem;}
+.history-copy{width:38px!important;min-width:38px!important;height:38px!important;min-height:38px!important;padding:0!important;border-radius:12px!important;}
+.history-copy .material-icons{font-size:1rem!important;}
+@media(max-width:560px){.mode-toggle-label{grid-template-columns:26px auto minmax(0,1fr) 30px!important}.mode-info-button{width:30px!important;min-width:30px!important;height:30px!important;min-height:30px!important}.download-mode-toggle{padding:.48rem .52rem!important}.mode-switch button{min-height:38px!important}.history-item-row{grid-template-columns:minmax(0,1fr) 34px}.history-copy{width:34px!important;min-width:34px!important;height:34px!important;min-height:34px!important}}
+
+
+.mode-help-box{display:grid;gap:.28rem;padding:.62rem .7rem;border:1px solid rgba(56,189,248,.18);border-radius:13px;background:rgba(56,189,248,.07);color:#dbeafe;font-size:.78rem;line-height:1.35;}
+.mode-help-box strong{color:#f8fafc;font-size:.82rem;}
+.mode-help-box p{margin:0;color:rgba(226,232,240,.74);}
+.mode-help-box b{color:#fde68a;}
+@media(max-width:560px){.mode-help-box{padding:.5rem .55rem;font-size:.7rem;border-radius:11px}}
+
+
+/* Hide verbose mode note; show it only in ! help */
+.mode-toggle-label{grid-template-columns:30px minmax(0,1fr) 34px!important;}
+.mode-toggle-label small{display:none!important;}
+@media(max-width:560px){.mode-toggle-label{grid-template-columns:26px minmax(0,1fr) 30px!important}.mode-toggle-label small{display:none!important}}
 
 </style>

@@ -256,6 +256,7 @@ async fn handle_add_file(
                 tmdb_meta,
                 batch_id,
                 batch_name,
+                None,
             ).await.map_err(|e| {
                 tracing::error!("Failed to add download: {}", e);
                 StatusCode::INTERNAL_SERVER_ERROR

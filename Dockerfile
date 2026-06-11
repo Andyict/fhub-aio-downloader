@@ -20,8 +20,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    for i in 1 2 3; do \
+RUN for i in 1 2 3; do \
       cargo install cargo-chef --locked && break; \
       if [ "$i" = "3" ]; then exit 1; fi; \
       sleep $((i * 10)); \
@@ -40,8 +39,7 @@ FROM chef AS backend-builder
 
 # Restore deps from recipe - this layer only re-runs when Cargo.toml/lock change
 COPY --from=planner /build/recipe.json recipe.json
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    for i in 1 2 3; do \
+RUN for i in 1 2 3; do \
       cargo chef cook --release --recipe-path recipe.json && break; \
       if [ "$i" = "3" ]; then exit 1; fi; \
       sleep $((i * 20)); \
@@ -50,9 +48,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 # Now copy real source and do the final incremental compile (just fhub crate)
 COPY backend/Cargo.toml backend/Cargo.lock ./
 COPY backend/src ./src
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/build/target \
-    cargo build --release && \
+RUN cargo build --release && \
     cp /build/target/release/fhub /build/fhub-binary
 
 # Frontend builder stage
@@ -69,8 +65,7 @@ WORKDIR /build
 
 # Cache dependencies
 COPY frontend/package*.json ./
-RUN --mount=type=cache,target=/root/.npm \
-    npm install
+RUN npm install
 
 # Rebuild native modules for current platform (fixes lightningcss issue)
 RUN npm rebuild lightningcss --platform=linux --arch=x64

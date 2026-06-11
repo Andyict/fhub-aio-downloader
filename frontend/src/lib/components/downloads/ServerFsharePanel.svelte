@@ -32,6 +32,7 @@
   let submitLoading = $state(false);
   let preview = $state<PreviewResponse | null>(null);
   let selectedUrls = $state<Set<string>>(new Set());
+  let seriesMode = $state(false);
   let showConfirm = $state(false);
   let fshareEmail = $state("");
   let fsharePassword = $state("");
@@ -41,7 +42,7 @@
   const activeAccount = $derived(accountStore.primaryFormatted);
   const hasFshareAccount = $derived(Boolean(accountStore.primary?.email));
   const needsVipRefresh = $derived(Boolean(accountStore.primary?.email) && (!accountStore.primary?.rank || accountStore.primary?.rank === "UNVERIFIED"));
-  const downloadableItems = $derived((preview?.items || []).filter((item) => !item.is_directory));
+  const downloadableItems = $derived(sortPreviewItems((preview?.items || []).filter((item) => !item.is_directory)));
   const selectedItems = $derived(downloadableItems.filter((item) => selectedUrls.has(item.url)));
   const selectedSize = $derived(selectedItems.reduce((sum, item) => sum + (item.size || 0), 0));
 
@@ -71,6 +72,30 @@
       await autoRefreshVipStatus(true);
     }
   });
+
+
+  function episodeSortKey(name: string) {
+    const text = name || "";
+    const seasonEpisode = text.match(/S(\d{1,2})\s*E(\d{1,3})/i);
+    if (seasonEpisode) return Number(seasonEpisode[1]) * 10000 + Number(seasonEpisode[2]);
+
+    const episodeOnly =
+      text.match(/(?:^|[\s._-])E(?:p(?:isode)?)?[\s._-]?(\d{1,3})(?:[\s._-]|$)/i) ||
+      text.match(/(?:^|[\s._-])T(?:ập)?[\s._-]?(\d{1,3})(?:[\s._-]|$)/i) ||
+      text.match(/(?:tập|tap|episode|ep)[\s._-]*(\d{1,3})/i);
+    if (episodeOnly) return Number(episodeOnly[1]);
+
+    return Number.MAX_SAFE_INTEGER;
+  }
+
+  function sortPreviewItems(items: PreviewItem[]) {
+    return [...items].sort((a, b) => {
+      const aKey = episodeSortKey(a.name);
+      const bKey = episodeSortKey(b.name);
+      if (aKey !== bKey) return aKey - bKey;
+      return (a.name || "").localeCompare(b.name || "", undefined, { numeric: true, sensitivity: "base" });
+    });
+  }
 
   function formatBytes(bytes: number) {
     if (!bytes) return "0 B";
@@ -179,6 +204,7 @@
       }
       preview = await response.json();
       selectAll();
+      seriesMode = downloadableItems.length > 1;
     } catch (error) {
       const message = error instanceof Error ? error.message : "Không kiểm tra được link";
       toasts.error(message);
@@ -193,6 +219,7 @@
 
     const batchId = crypto.randomUUID();
     const batchName = preview?.folder_name || "FShare external link";
+    const folderName = seriesMode ? batchName : undefined;
 
     try {
       for (const item of selectedItems) {
@@ -207,10 +234,11 @@
             body: JSON.stringify({
               url: item.url,
               filename: item.name,
-              category: "fshare",
+              category: seriesMode ? "tv" : "fshare",
               priority: "NORMAL",
               batch_id: batchId,
               batch_name: batchName,
+              folder_name: folderName,
             }),
           });
         } finally {
@@ -328,6 +356,37 @@
           <button type="button" onclick={clearSelection}>Bỏ chọn</button>
         </div>
       </div>
+
+      {#if downloadableItems.length > 1}
+        <div class="download-mode-toggle" class:series={seriesMode} aria-label="Chọn kiểu tải">
+          <div class="mode-toggle-label">
+            <span class="material-icons">swap_horiz</span>
+            <strong>Chế độ tải</strong>
+            <small>{seriesMode ? `Phim bộ · chung thư mục: ${preview.folder_name || "tự nhận diện"}` : "Phim lẻ · lưu từng file riêng"}</small>
+          </div>
+          <div class="mode-switch" role="group" aria-label="Chọn phim lẻ hoặc phim bộ">
+            <span class="mode-glow" aria-hidden="true"></span>
+            <button
+              type="button"
+              class:active={!seriesMode}
+              aria-pressed={!seriesMode}
+              onclick={() => (seriesMode = false)}
+            >
+              <span class="material-icons">movie</span>
+              <strong>Phim lẻ</strong>
+            </button>
+            <button
+              type="button"
+              class:active={seriesMode}
+              aria-pressed={seriesMode}
+              onclick={() => (seriesMode = true)}
+            >
+              <span class="material-icons">video_library</span>
+              <strong>Phim bộ</strong>
+            </button>
+          </div>
+        </div>
+      {/if}
 
       <div class="file-list">
         {#each downloadableItems as item}
@@ -789,6 +848,139 @@
     max-height: 360px;
     overflow: auto;
     padding: 0.45rem;
+  }
+
+
+
+  .download-mode-toggle {
+    display: grid;
+    gap: 0.72rem;
+    margin: 0.25rem 0 0.35rem;
+    padding: 0.9rem;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 22px;
+    background:
+      radial-gradient(circle at 0 0, rgba(59, 130, 246, 0.16), transparent 38%),
+      linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(8, 12, 22, 0.94));
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.26), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  }
+
+  .download-mode-toggle.series {
+    border-color: rgba(248, 193, 74, 0.32);
+    background:
+      radial-gradient(circle at 100% 0, rgba(248, 193, 74, 0.22), transparent 38%),
+      linear-gradient(135deg, rgba(20, 26, 42, 0.96), rgba(10, 8, 18, 0.94));
+  }
+
+  .mode-toggle-label {
+    display: grid;
+    grid-template-columns: 34px auto minmax(0, 1fr);
+    align-items: center;
+    gap: 0.55rem;
+    color: #f8fafc;
+  }
+
+  .mode-toggle-label > .material-icons {
+    width: 34px;
+    height: 34px;
+    display: grid;
+    place-items: center;
+    border-radius: 12px;
+    color: #c7d2fe;
+    background: rgba(99, 102, 241, 0.14);
+  }
+
+  .download-mode-toggle.series .mode-toggle-label > .material-icons {
+    color: #111827;
+    background: linear-gradient(135deg, #f8c14a, #ff8a1f);
+  }
+
+  .mode-toggle-label strong {
+    font-size: 0.9rem;
+    font-weight: 950;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    white-space: nowrap;
+  }
+
+  .mode-toggle-label small {
+    min-width: 0;
+    color: rgba(226, 232, 240, 0.68);
+    font-size: 0.78rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mode-switch {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.28rem;
+    padding: 0.28rem;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 18px;
+    background: rgba(2, 6, 23, 0.54);
+    box-shadow: inset 0 1px 8px rgba(0, 0, 0, 0.28);
+  }
+
+  .mode-glow {
+    position: absolute;
+    inset: 0.28rem auto 0.28rem 0.28rem;
+    width: calc(50% - 0.14rem);
+    border-radius: 14px;
+    background: linear-gradient(135deg, #60a5fa, #6366f1);
+    box-shadow: 0 10px 24px rgba(96, 165, 250, 0.28);
+    transition: transform 0.22s ease, background 0.22s ease, box-shadow 0.22s ease;
+  }
+
+  .download-mode-toggle.series .mode-glow {
+    transform: translateX(calc(100% + 0.28rem));
+    background: linear-gradient(135deg, #f8c14a, #ff8a1f);
+    box-shadow: 0 10px 26px rgba(248, 193, 74, 0.3);
+  }
+
+  .mode-switch button {
+    position: relative;
+    z-index: 1;
+    min-height: 58px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border: 0;
+    border-radius: 14px;
+    background: transparent;
+    color: rgba(226, 232, 240, 0.6);
+    cursor: pointer;
+    transition: color 0.18s ease, transform 0.18s ease;
+  }
+
+  .mode-switch button:hover {
+    color: #fff;
+    transform: translateY(-1px);
+  }
+
+  .mode-switch button.active {
+    color: #07111f;
+  }
+
+  .mode-switch button .material-icons {
+    font-size: 1.2rem;
+  }
+
+  .mode-switch button strong {
+    font-size: 1rem;
+    font-weight: 1000;
+  }
+
+  @media (max-width: 560px) {
+    .mode-toggle-label {
+      grid-template-columns: 34px minmax(0, 1fr);
+    }
+    .mode-toggle-label small {
+      grid-column: 2;
+    }
   }
 
   .file-row {

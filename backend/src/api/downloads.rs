@@ -200,6 +200,11 @@ pub struct AddDownloadRequest {
     /// Batch display name (e.g., "Breaking Bad S01")
     #[serde(default)]
     pub batch_name: Option<String>,
+    /// Optional subfolder under the download root for manual grouping.
+    /// Used by the frontend "series mode" so later episodes with the same
+    /// show name land in the same folder even without TMDB metadata.
+    #[serde(default)]
+    pub folder_name: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -715,6 +720,7 @@ async fn add_download(
         tmdb_metadata,
         batch_id,
         batch_name,
+        payload.folder_name,
     ).await {
         Ok(task) => task,
         Err(e) => {
