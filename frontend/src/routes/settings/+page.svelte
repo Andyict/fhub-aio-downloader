@@ -315,7 +315,7 @@
 
   async function runWebUpdate() {
     if (!updateStatus?.updater_available) {
-      updateMessage = "Bản cài này không có quyền update trực tiếp. Copy lệnh update hoặc bật auto-update bằng Watchtower.";
+      updateMessage = "Không có quyền update trực tiếp; đã copy lệnh update.";
       await copyUpdateCommand();
       return;
     }
@@ -331,7 +331,7 @@
       const result = response.ok ? await response.json() : { success: false, message: await response.text() };
       const rawMessage = result.message || (result.success ? "Đã bắt đầu cập nhật." : "Cập nhật thất bại.");
       updateMessage = /permission denied|docker socket|var\/run\/docker\.sock/i.test(rawMessage)
-        ? "FHub không có quyền update trực tiếp trong container. Dùng lệnh update thủ công hoặc bật Watchtower auto-update."
+        ? "Không có quyền update trực tiếp; hãy dùng lệnh update đã copy."
         : rawMessage;
       if (result.success) setTimeout(() => window.location.reload(), 12000);
     } catch (error) {
@@ -564,23 +564,11 @@
         <strong>{updateStatus?.update_available ? "Có bản FHub mới trên GitHub" : "FHub đang ở trạng thái cập nhật"}</strong>
         <small>Hiện tại: {updateStatus?.current_commit || updateStatus?.current_version || "không rõ"} · Mới nhất: {updateStatus?.latest_commit || "đang kiểm tra"}</small>
         {#if updateMessage}<p>{updateMessage}</p>{/if}
-        {#if updateStatus && !updateStatus.updater_available}
-          <p class="update-warning">Bản cài này không có quyền update trực tiếp. Cách ít lỗi nhất: copy lệnh update hoặc bật Watchtower auto-update.</p>
-          <div class="update-command-box">
-            <code>{manualUpdateCommand}</code>
-            <button type="button" onclick={() => copyUpdateCommand()}>{updateCommandCopied ? "Đã copy" : "Copy"}</button>
-          </div>
-          <p class="update-hint">Muốn tự động cập nhật như app nền: chạy <code>{watchtowerCommand}</code> một lần để bật Watchtower.</p>
-        {/if}
       </div>
       <div class="update-actions">
         <button type="button" class="ghost-button" onclick={checkUpdateStatus} disabled={checkingUpdate}>{checkingUpdate ? "Đang check..." : "Check update"}</button>
         {#if updateStatus?.update_available}
-          {#if updateStatus.updater_available}
-            <button type="button" class="primary-button update-now" onclick={runWebUpdate} disabled={updatingApp}>{updatingApp ? "Đang update..." : "Update"}</button>
-          {:else}
-            <button type="button" class="primary-button update-now" onclick={() => copyUpdateCommand()}>{updateCommandCopied ? "Đã copy" : "Copy lệnh update"}</button>
-          {/if}
+          <button type="button" class="primary-button update-now" onclick={runWebUpdate} disabled={updatingApp}>{updatingApp ? "Đang update..." : "Update now"}</button>
         {/if}
       </div>
     </section>
