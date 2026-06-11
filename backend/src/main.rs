@@ -77,6 +77,38 @@ struct HealthResponse {
     version: &'static str,
 }
 
+#[derive(serde::Deserialize)]
+struct UpdaterRequest {
+    image: Option<String>,
+    container: Option<String>,
+}
+
+async fn updater_health() -> Json<HealthResponse> {
+    Json(HealthResponse { status: "ok", service: "fhub-updater", version: env!("CARGO_PKG_VERSION") })
+}
+
+async fn updater_run(Json(payload): Json<UpdaterRequest>) -> Result<Json<api::update::UpdateRunResponse>, axum::http::StatusCode> {
+    let image = payload.image
+        .or_else(|| std::env::var("FHUB_UPDATE_IMAGE").ok())
+        .unwrap_or_else(|| "ghcr.io/andyict/fhub-aio:latest".to_string());
+    let container = payload.container
+        .or_else(|| std::env::var("FHUB_CONTAINER_NAME").ok())
+        .unwrap_or_else(|| "fhub".to_string());
+    api::update::perform_docker_update(image, container).await
+}
+
+async fn run_updater() {
+    let port = std::env::var("FHUB_UPDATER_PORT").unwrap_or_else(|_| "8585".to_string());
+    let bind = std::env::var("FHUB_UPDATER_BIND").unwrap_or_else(|_| "0.0.0.0".to_string());
+    let addr: SocketAddr = format!("{bind}:{port}").parse().expect("invalid updater bind/port");
+    let app = Router::new()
+        .route("/health", get(updater_health))
+        .route("/update", post(updater_run));
+    tracing::info!("Starting FHUB updater helper on {}", addr);
+    let listener = tokio::net::TcpListener::bind(addr).await.expect("bind updater");
+    axum::serve(listener, app).await.expect("serve updater");
+}
+
 
 async fn spa_index() -> impl IntoResponse {
     axum::response::Html(tokio::fs::read_to_string("static/index.html").await.unwrap_or_else(|_| "FHUB static index not found".to_string()))
@@ -100,6 +132,11 @@ async fn main() {
         .init();
 
     tracing::info!("Starting FHUB v{}", env!("CARGO_PKG_VERSION"));
+
+    if std::env::args().nth(1).as_deref() == Some("updater") {
+        run_updater().await;
+        return;
+    }
 
     // Create FHUB appData directory structure if needed.
     if let Err(e) = config::ensure_appdata_dirs() {

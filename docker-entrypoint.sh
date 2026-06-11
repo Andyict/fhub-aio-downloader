@@ -13,6 +13,11 @@ APP_GID="911"
 APPDATA_DIR="${FHUB_APPDATA_DIR:-/appData}"
 DOWNLOADS_DIR="${FHUB_DOWNLOADS_DIR:-${APPDATA_DIR}/downloads}"
 
+# Updater helper needs Docker socket access; keep it as root and skip appData checks.
+if [ "${1:-}" = "updater" ] || { [ "${1:-}" = "/app/fhub" ] && [ "${2:-}" = "updater" ]; }; then
+    exec "$@"
+fi
+
 mkdir -p "$APPDATA_DIR" \
          "$APPDATA_DIR/config" \
          "$APPDATA_DIR/data" \

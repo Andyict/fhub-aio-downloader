@@ -31,11 +31,11 @@ struct UpdateStatusResponse {
     message: String,
 }
 
-#[derive(Serialize)]
-struct UpdateRunResponse {
-    success: bool,
-    message: String,
-    logs: Vec<String>,
+#[derive(Serialize, Deserialize)]
+pub struct UpdateRunResponse {
+    pub success: bool,
+    pub message: String,
+    pub logs: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -80,6 +80,13 @@ fn update_image() -> String {
 
 fn container_name() -> String {
     std::env::var("FHUB_CONTAINER_NAME").unwrap_or_else(|_| DEFAULT_CONTAINER.to_string())
+}
+
+fn updater_url() -> Option<String> {
+    std::env::var("FHUB_UPDATER_URL")
+        .ok()
+        .map(|v| v.trim().trim_end_matches('/').to_string())
+        .filter(|v| !v.is_empty())
 }
 
 async fn latest_commit(state: &AppState) -> Result<(String, Option<String>), String> {
@@ -136,6 +143,26 @@ async fn update_status(State(state): State<Arc<AppState>>) -> Result<Json<Update
     }))
 }
 
+fn decode_chunked_body(body: &str) -> String {
+    let bytes = body.as_bytes();
+    let mut pos = 0usize;
+    let mut out = Vec::new();
+    loop {
+        let Some(line_end_rel) = bytes[pos..].windows(2).position(|w| w == b"\r\n") else { break; };
+        let line_end = pos + line_end_rel;
+        let size_line = String::from_utf8_lossy(&bytes[pos..line_end]);
+        let size_hex = size_line.split(';').next().unwrap_or("").trim();
+        let Ok(size) = usize::from_str_radix(size_hex, 16) else { return body.to_string(); };
+        pos = line_end + 2;
+        if size == 0 { break; }
+        if pos + size > bytes.len() { return body.to_string(); }
+        out.extend_from_slice(&bytes[pos..pos + size]);
+        pos += size;
+        if pos + 2 <= bytes.len() && &bytes[pos..pos + 2] == b"\r\n" { pos += 2; }
+    }
+    String::from_utf8_lossy(&out).to_string()
+}
+
 async fn docker_request(method: &str, path: &str, body: Option<String>) -> Result<(u16, String), String> {
     let mut stream = UnixStream::connect(DOCKER_SOCKET)
         .await
@@ -152,7 +179,9 @@ async fn docker_request(method: &str, path: &str, body: Option<String>) -> Resul
     let raw = String::from_utf8_lossy(&buf).to_string();
     let mut parts = raw.splitn(2, "\r\n\r\n");
     let head = parts.next().unwrap_or_default();
-    let response_body = parts.next().unwrap_or_default().to_string();
+    let response_body_raw = parts.next().unwrap_or_default().to_string();
+    let is_chunked = head.lines().any(|line| line.to_ascii_lowercase().starts_with("transfer-encoding:") && line.to_ascii_lowercase().contains("chunked"));
+    let response_body = if is_chunked { decode_chunked_body(&response_body_raw) } else { response_body_raw };
     let status = head.lines().next()
         .and_then(|line| line.split_whitespace().nth(1))
         .and_then(|code| code.parse::<u16>().ok())
@@ -161,8 +190,32 @@ async fn docker_request(method: &str, path: &str, body: Option<String>) -> Resul
 }
 
 async fn run_update() -> Result<Json<UpdateRunResponse>, StatusCode> {
-    let image = update_image();
-    let container = container_name();
+    if let Some(updater) = updater_url() {
+        let payload = json!({
+            "image": update_image(),
+            "container": container_name(),
+        });
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(900))
+            .build()
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        match client.post(format!("{updater}/update"))
+            .json(&payload)
+            .send()
+            .await
+        {
+            Ok(resp) => match resp.json::<UpdateRunResponse>().await {
+                Ok(result) => return Ok(Json(result)),
+                Err(e) => return Ok(Json(UpdateRunResponse { success: false, message: format!("Updater trả phản hồi không đọc được: {e}"), logs: vec![] })),
+            },
+            Err(e) => return Ok(Json(UpdateRunResponse { success: false, message: format!("Không gọi được updater helper: {e}"), logs: vec![] })),
+        }
+    }
+
+    perform_docker_update(update_image(), container_name()).await
+}
+
+pub async fn perform_docker_update(image: String, container: String) -> Result<Json<UpdateRunResponse>, StatusCode> {
     let mut logs = Vec::new();
 
     if !updater_available().await {
@@ -173,13 +226,17 @@ async fn run_update() -> Result<Json<UpdateRunResponse>, StatusCode> {
         }));
     }
 
-    logs.push(format!("Pulling image {image}"));
-    let pull_path = format!("/images/create?fromImage={}", urlencoding::encode(&image));
-    match tokio::time::timeout(Duration::from_secs(600), docker_request("POST", &pull_path, None)).await {
-        Ok(Ok((status, body))) if (200..300).contains(&status) => logs.push(format!("Pull complete: {}", body.lines().last().unwrap_or("ok"))),
-        Ok(Ok((status, body))) => return Ok(Json(UpdateRunResponse { success: false, message: format!("Pull image thất bại HTTP {status}"), logs: [logs, vec![body]].concat() })),
-        Ok(Err(e)) => return Ok(Json(UpdateRunResponse { success: false, message: e, logs })),
-        Err(_) => return Ok(Json(UpdateRunResponse { success: false, message: "Pull image quá thời gian.".to_string(), logs })),
+    if image.contains('/') {
+        logs.push(format!("Pulling image {image}"));
+        let pull_path = format!("/images/create?fromImage={}", urlencoding::encode(&image));
+        match tokio::time::timeout(Duration::from_secs(600), docker_request("POST", &pull_path, None)).await {
+            Ok(Ok((status, body))) if (200..300).contains(&status) => logs.push(format!("Pull complete: {}", body.lines().last().unwrap_or("ok"))),
+            Ok(Ok((status, body))) => return Ok(Json(UpdateRunResponse { success: false, message: format!("Pull image thất bại HTTP {status}"), logs: [logs, vec![body]].concat() })),
+            Ok(Err(e)) => return Ok(Json(UpdateRunResponse { success: false, message: e, logs })),
+            Err(_) => return Ok(Json(UpdateRunResponse { success: false, message: "Pull image quá thời gian.".to_string(), logs })),
+        }
+    } else {
+        logs.push(format!("Using local image {image}"));
     }
 
     logs.push(format!("Inspecting container {container}"));
@@ -199,13 +256,10 @@ async fn run_update() -> Result<Json<UpdateRunResponse>, StatusCode> {
     let host_config = inspect_json.get("HostConfig").cloned().unwrap_or_else(|| json!({}));
     let mut config = inspect_json.get("Config").cloned().unwrap_or_else(|| json!({}));
     config["Image"] = json!(image);
-    let networking_config = json!({
-        "EndpointsConfig": inspect_json
-            .get("NetworkSettings")
-            .and_then(|n| n.get("Networks"))
-            .cloned()
-            .unwrap_or_else(|| json!({}))
-    });
+    // Do not reuse inspected NetworkSettings as create-time NetworkingConfig.
+    // Docker's inspect payload contains runtime endpoint details that can be stale
+    // after renaming/stopping the old container. HostConfig.NetworkMode is enough
+    // for compose/default networks and avoids create failures during self-update.
     let create_body = json!({
         "Hostname": config.get("Hostname").cloned().unwrap_or_else(|| json!("")),
         "Domainname": config.get("Domainname").cloned().unwrap_or_else(|| json!("")),
@@ -218,7 +272,6 @@ async fn run_update() -> Result<Json<UpdateRunResponse>, StatusCode> {
         "ExposedPorts": config.get("ExposedPorts").cloned().unwrap_or_else(|| json!({})),
         "WorkingDir": config.get("WorkingDir").cloned().unwrap_or_else(|| json!("")),
         "HostConfig": host_config,
-        "NetworkingConfig": networking_config,
     }).to_string();
 
     let backup = format!("{}-old-{}", container, chrono::Utc::now().format("%Y%m%d%H%M%S"));

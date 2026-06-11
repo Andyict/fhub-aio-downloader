@@ -12,13 +12,12 @@ services:
     volumes:
       - fhub_appdata:/appData
 
-      # Cho phép nút Update trong web tự pull/recreate container khi GitHub có bản mới.
-      # Nếu không muốn FHub quản lý Docker, có thể xóa dòng này và update thủ công bằng ./update.sh.
-      - /var/run/docker.sock:/var/run/docker.sock
-
       # Video/file tải về sẽ được lưu ở đây.
       # Chỉ đổi /volume1/Video thành thư mục trên NAS của bạn; giữ nguyên /downloads.
       - /volume1/Video:/downloads
+
+    networks:
+      - fhub_net
 
     environment:
       - TZ=Asia/Ho_Chi_Minh
@@ -27,6 +26,28 @@ services:
       - FHUB_SEGMENTS_PER_DOWNLOAD=16
       - FHUB_MAX_CONCURRENT=4
       - RUST_LOG=fhub=info,tower_http=info
+      - FHUB_UPDATER_URL=http://fhub-updater:8585
+      - FHUB_CONTAINER_NAME=fhub
+      - FHUB_UPDATE_IMAGE=ghcr.io/andyict/fhub-aio:latest
+
+  fhub-updater:
+    image: ghcr.io/andyict/fhub-aio:latest
+    container_name: fhub-updater
+    restart: unless-stopped
+    command: ["/app/fhub", "updater"]
+    networks:
+      - fhub_net
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - TZ=Asia/Ho_Chi_Minh
+      - RUST_LOG=fhub=info,tower_http=info
+      - FHUB_CONTAINER_NAME=fhub
+      - FHUB_UPDATE_IMAGE=ghcr.io/andyict/fhub-aio:latest
 
 volumes:
   fhub_appdata:
+
+networks:
+  fhub_net:
+    name: fhub_net
