@@ -28,6 +28,10 @@
     quality?: string | null;
     resolution?: string | null;
     source?: string | null;
+    score?: number;
+    fcode?: string;
+    viet_sub?: boolean;
+    viet_dub?: boolean;
   };
 
   type PreviewItem = {
