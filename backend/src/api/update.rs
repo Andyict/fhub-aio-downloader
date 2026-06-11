@@ -8,7 +8,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use crate::AppState;
 
 const DEFAULT_REPO: &str = "Andyict/fhub-aio-downloader";
-const DEFAULT_IMAGE: &str = "ghcr.io/andyict/fhub-aio-downloader:latest";
+const DEFAULT_IMAGE: &str = "ghcr.io/andyict/fhub-aio:latest";
 const DEFAULT_CONTAINER: &str = "fhub";
 const DOCKER_SOCKET: &str = "/var/run/docker.sock";
 
@@ -100,8 +100,11 @@ async fn latest_commit(state: &AppState) -> Result<(String, Option<String>), Str
     Ok((payload.sha, payload.html_url))
 }
 
-fn updater_available() -> bool {
-    Path::new(DOCKER_SOCKET).exists()
+async fn updater_available() -> bool {
+    if !Path::new(DOCKER_SOCKET).exists() {
+        return false;
+    }
+    UnixStream::connect(DOCKER_SOCKET).await.is_ok()
 }
 
 fn short_sha(value: &str) -> String {
@@ -126,7 +129,7 @@ async fn update_status(State(state): State<Arc<AppState>>) -> Result<Json<Update
         latest_commit: latest.map(|v| short_sha(&v)),
         latest_commit_url: latest_url,
         update_available,
-        updater_available: updater_available(),
+        updater_available: updater_available().await,
         image: update_image(),
         container: container_name(),
         message,
@@ -162,7 +165,7 @@ async fn run_update() -> Result<Json<UpdateRunResponse>, StatusCode> {
     let container = container_name();
     let mut logs = Vec::new();
 
-    if !updater_available() {
+    if !updater_available().await {
         return Ok(Json(UpdateRunResponse {
             success: false,
             message: "Chưa bật web updater. Cần mount /var/run/docker.sock vào container FHub rồi restart một lần.".to_string(),
