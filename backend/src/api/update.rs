@@ -108,6 +108,19 @@ async fn latest_commit(state: &AppState) -> Result<(String, Option<String>), Str
 }
 
 async fn updater_available() -> bool {
+    if let Some(updater) = updater_url() {
+        let client = match reqwest::Client::builder().timeout(Duration::from_secs(5)).build() {
+            Ok(client) => client,
+            Err(_) => return false,
+        };
+        return client
+            .get(format!("{updater}/health"))
+            .send()
+            .await
+            .map(|resp| resp.status().is_success())
+            .unwrap_or(false);
+    }
+
     if !Path::new(DOCKER_SOCKET).exists() {
         return false;
     }

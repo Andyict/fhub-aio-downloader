@@ -44,6 +44,14 @@ services:
       - RUST_LOG=fhub=info,tower_http=info
       - FHUB_CONTAINER_NAME=fhub
       - FHUB_UPDATE_IMAGE=ghcr.io/andyict/fhub-aio:latest
+      - FHUB_UPDATER_BIND=0.0.0.0
+      - FHUB_UPDATER_PORT=8585
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8585/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 20s
 
 volumes:
   fhub_appdata:

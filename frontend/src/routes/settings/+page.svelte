@@ -557,19 +557,16 @@
     <article><span class="material-icons">dns</span><div><strong>Server</strong><small>{`${settings.server_host}:${settings.server_port}`}</small></div></article>
   </section>
 
-  {#if updateStatus?.update_available || updateStatus || updateMessage}
-    <section class="update-banner" class:available={updateStatus?.update_available}>
+  {#if updateStatus?.update_available}
+    <section class="update-banner available">
       <div class="update-icon"><span class="material-icons">system_update_alt</span></div>
       <div class="update-copy">
-        <strong>{updateStatus?.update_available ? "Có bản FHub mới trên GitHub" : "FHub đang ở trạng thái cập nhật"}</strong>
-        <small>Hiện tại: {updateStatus?.current_commit || updateStatus?.current_version || "không rõ"} · Mới nhất: {updateStatus?.latest_commit || "đang kiểm tra"}</small>
+        <strong>Có bản FHub mới trên GitHub</strong>
+        <small>Hiện tại: {updateStatus.current_commit || updateStatus.current_version || "không rõ"} · Mới nhất: {updateStatus.latest_commit || "đang kiểm tra"}</small>
         {#if updateMessage}<p>{updateMessage}</p>{/if}
       </div>
       <div class="update-actions">
-        <button type="button" class="ghost-button" onclick={checkUpdateStatus} disabled={checkingUpdate}>{checkingUpdate ? "Đang check..." : "Check update"}</button>
-        {#if updateStatus?.update_available}
-          <button type="button" class="primary-button update-now" onclick={runWebUpdate} disabled={updatingApp}>{updatingApp ? "Đang update..." : "Update now"}</button>
-        {/if}
+        <button type="button" class="primary-button update-now" onclick={runWebUpdate} disabled={updatingApp}>{updatingApp ? "Đang update..." : "Update"}</button>
       </div>
     </section>
   {/if}

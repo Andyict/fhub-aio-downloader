@@ -4,7 +4,7 @@ services:
   fhub:
     # Production example for a prebuilt image.
     # If you build from source, use docker-compose.yml instead.
-    image: ghcr.io/nas2nd/fhub:latest
+    image: ghcr.io/andyict/fhub-aio:latest
     container_name: fhub
     restart: unless-stopped
 
@@ -20,29 +20,47 @@ services:
       # Keep the container path /appData.
       - /volume1/docker/fhub/appData:/appData
 
-      # Enables the web Settings → Update button to pull/recreate FHub when GitHub has a newer build.
-      # Remove this line if you prefer manual updates only.
-      - /var/run/docker.sock:/var/run/docker.sock
-
       # Downloads/media folder on the host NAS.
       # IMPORTANT: change /volume1/Video to your real folder if needed.
       # Keep the container path /downloads unless FHUB_DOWNLOADS_DIR is changed too.
       - /volume1/Video:/downloads
 
+    networks:
+      - fhub_net
+
     environment:
       - TZ=Asia/Ho_Chi_Minh
       - FHUB_APPDATA_DIR=/appData
       - FHUB_DOWNLOADS_DIR=/downloads
-
-      # Public-safe defaults: stable on small/older NAS devices.
       - FHUB_SEGMENTS_PER_DOWNLOAD=16
       - FHUB_MAX_CONCURRENT=4
-
       - RUST_LOG=fhub=info,tower_http=info
+      - FHUB_UPDATER_URL=http://fhub-updater:8585
+      - FHUB_CONTAINER_NAME=fhub
+      - FHUB_UPDATE_IMAGE=ghcr.io/andyict/fhub-aio:latest
+
+  fhub-updater:
+    image: ghcr.io/andyict/fhub-aio:latest
+    container_name: fhub-updater
+    restart: unless-stopped
+    command: ["/app/fhub", "updater"]
+    networks:
+      - fhub_net
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - TZ=Asia/Ho_Chi_Minh
+      - RUST_LOG=fhub=info,tower_http=info
+      - FHUB_CONTAINER_NAME=fhub
+      - FHUB_UPDATE_IMAGE=ghcr.io/andyict/fhub-aio:latest
 
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8484/api/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8585/health"]
       interval: 30s
       timeout: 3s
       retries: 3
       start_period: 10s
+
+networks:
+  fhub_net:
+    name: fhub_net
