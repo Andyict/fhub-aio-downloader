@@ -228,6 +228,59 @@ async fn run_update() -> Result<Json<UpdateRunResponse>, StatusCode> {
     perform_docker_update(update_image(), container_name()).await
 }
 
+async fn rollback_update(container: &str, backup: &str, logs: &mut Vec<String>) {
+    logs.push("Rolling back to previous container".to_string());
+    let remove_new = format!("/containers/{}?v=false&force=true", urlencoding::encode(container));
+    let _ = docker_request("DELETE", &remove_new, None).await;
+    let rollback_path = format!("/containers/{}/rename?name={}", urlencoding::encode(backup), urlencoding::encode(container));
+    let _ = docker_request("POST", &rollback_path, None).await;
+    let old_start = format!("/containers/{}/start", urlencoding::encode(container));
+    let _ = docker_request("POST", &old_start, None).await;
+}
+
+async fn wait_for_container_healthy(container: &str, timeout_secs: u64, logs: &mut Vec<String>) -> Result<(), String> {
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(timeout_secs);
+    let inspect_path = format!("/containers/{}/json", urlencoding::encode(container));
+    let mut last_status = String::new();
+
+    loop {
+        let (status, body) = docker_request("GET", &inspect_path, None)
+            .await
+            .map_err(|e| format!("Không kiểm tra được container mới: {e}"))?;
+        if status != 200 {
+            return Err(format!("Không tìm thấy container mới sau khi start HTTP {status}"));
+        }
+
+        let value: serde_json::Value = serde_json::from_str(&body)
+            .map_err(|e| format!("Không đọc được trạng thái container mới: {e}"))?;
+        let running = value.pointer("/State/Running").and_then(|v| v.as_bool()).unwrap_or(false);
+        let exit_code = value.pointer("/State/ExitCode").and_then(|v| v.as_i64()).unwrap_or_default();
+        let health = value.pointer("/State/Health/Status").and_then(|v| v.as_str());
+
+        match health {
+            Some("healthy") => {
+                logs.push("Updated container is healthy".to_string());
+                return Ok(());
+            }
+            Some(current) if current != last_status => {
+                logs.push(format!("Waiting for updated container health: {current}"));
+                last_status = current.to_string();
+            }
+            None if running => {
+                logs.push("Updated container is running; no Docker healthcheck configured".to_string());
+                return Ok(());
+            }
+            _ if !running => return Err(format!("Container mới đã dừng sớm với exit code {exit_code}")),
+            _ => {}
+        }
+
+        if tokio::time::Instant::now() >= deadline {
+            return Err(format!("Container mới chưa healthy sau {timeout_secs}s"));
+        }
+        tokio::time::sleep(Duration::from_secs(2)).await;
+    }
+}
+
 pub async fn perform_docker_update(image: String, container: String) -> Result<Json<UpdateRunResponse>, StatusCode> {
     let mut logs = Vec::new();
 
@@ -314,23 +367,29 @@ pub async fn perform_docker_update(image: String, container: String) -> Result<J
     let start_path = format!("/containers/{}/start", urlencoding::encode(&container));
     match docker_request("POST", &start_path, None).await {
         Ok((status, body)) if (200..300).contains(&status) || status == 304 => {
-            logs.push("Updated container started. Current request may disconnect while FHub restarts.".to_string());
-            let remove_path = format!("/containers/{}?v=false&force=true", urlencoding::encode(&backup));
-            tokio::spawn(async move {
-                tokio::time::sleep(Duration::from_secs(20)).await;
-                let _ = docker_request("DELETE", &remove_path, None).await;
-            });
-            Ok(Json(UpdateRunResponse { success: true, message: "Đã bắt đầu cập nhật. FHub sẽ khởi động lại trong vài giây.".to_string(), logs }))
+            logs.push("Updated container started; verifying health before cleanup".to_string());
+            match wait_for_container_healthy(&container, 120, &mut logs).await {
+                Ok(()) => {
+                    let remove_path = format!("/containers/{}?v=false&force=true", urlencoding::encode(&backup));
+                    tokio::spawn(async move {
+                        tokio::time::sleep(Duration::from_secs(20)).await;
+                        let _ = docker_request("DELETE", &remove_path, None).await;
+                    });
+                    Ok(Json(UpdateRunResponse { success: true, message: "Cập nhật thành công. FHub đã khởi động lại và healthy.".to_string(), logs }))
+                }
+                Err(e) => {
+                    rollback_update(&container, &backup, &mut logs).await;
+                    Ok(Json(UpdateRunResponse { success: false, message: format!("{e}; đã rollback về bản cũ."), logs }))
+                }
+            }
         }
         Ok((status, body)) => {
-            let remove_new = format!("/containers/{}?v=false&force=true", urlencoding::encode(&container));
-            let _ = docker_request("DELETE", &remove_new, None).await;
-            let rollback_path = format!("/containers/{}/rename?name={}", urlencoding::encode(&backup), urlencoding::encode(&container));
-            let _ = docker_request("POST", &rollback_path, None).await;
-            let old_start = format!("/containers/{}/start", urlencoding::encode(&container));
-            let _ = docker_request("POST", &old_start, None).await;
+            rollback_update(&container, &backup, &mut logs).await;
             Ok(Json(UpdateRunResponse { success: false, message: format!("Start container mới thất bại HTTP {status}; đã rollback."), logs: [logs, vec![body]].concat() }))
         }
-        Err(e) => Ok(Json(UpdateRunResponse { success: false, message: e, logs })),
+        Err(e) => {
+            rollback_update(&container, &backup, &mut logs).await;
+            Ok(Json(UpdateRunResponse { success: false, message: format!("{e}; đã rollback."), logs }))
+        }
     }
 }
