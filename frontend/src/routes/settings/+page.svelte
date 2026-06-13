@@ -152,9 +152,6 @@
   let updateCommandCopied = $state(false);
   let showUpdateConfirm = $state(false);
 
-  const manualUpdateCommand = "docker compose pull && docker compose up -d";
-  const directDockerUpdateCommand = "docker pull ghcr.io/andyict/fhub-aio:latest && docker stop fhub && docker rm fhub && docker run -d --name fhub --restart unless-stopped --network fhub_net -p 8584:8484 -v fhub-aio_fhub_appdata:/appData -v /volume1/Video:/downloads -e TZ=Asia/Ho_Chi_Minh -e FHUB_APPDATA_DIR=/appData -e FHUB_DOWNLOADS_DIR=/downloads -e FHUB_SEGMENTS_PER_DOWNLOAD=16 -e FHUB_MAX_CONCURRENT=4 -e RUST_LOG=fhub=info,tower_http=info -e FHUB_CONTAINER_NAME=fhub -e FHUB_UPDATE_IMAGE=ghcr.io/andyict/fhub-aio:latest ghcr.io/andyict/fhub-aio:latest";
-  const watchtowerCommand = "docker compose -f docker-compose.auto-update.yml up -d";
 
   const activeUsers = $derived(users.filter((user) => user.is_active).length);
   const adminUsers = $derived(users.filter((user) => user.role === "admin").length);
@@ -305,21 +302,9 @@
     }
   }
 
-  async function copyUpdateCommand(command = manualUpdateCommand) {
-    try {
-      await navigator.clipboard.writeText(command);
-      updateCommandCopied = true;
-      updateMessage = "Đã copy lệnh update. Chạy trong thư mục cài FHub trên NAS.";
-      setTimeout(() => updateCommandCopied = false, 2200);
-    } catch {
-      updateMessage = `Không copy tự động được. Lệnh update: ${command}`;
-    }
-  }
-
   async function runWebUpdate() {
     if (!updateStatus?.updater_available) {
-      updateMessage = "Chế độ single-container: đã copy lệnh update Docker. Chạy trên NAS hoặc dán vào Portainer console.";
-      await copyUpdateCommand(directDockerUpdateCommand);
+      updateMessage = "Chưa bật quyền update trong web. Cần mount /var/run/docker.sock vào container FHub rồi restart một lần.";
       return;
     }
     showUpdateConfirm = true;
@@ -570,7 +555,7 @@
       <div class="update-actions">
         <button type="button" class="primary-button update-now" onclick={runWebUpdate} disabled={updatingApp}>
           <span class="material-icons">upgrade</span>
-          {updatingApp ? "Đang update..." : (updateStatus?.updater_available ? "Cập nhật" : (updateCommandCopied ? "Đã copy" : "Copy lệnh"))}
+          {updatingApp ? "Đang update..." : "Update"}
         </button>
       </div>
     </section>

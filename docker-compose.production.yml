@@ -25,6 +25,9 @@ services:
       # Keep the container path /downloads unless FHUB_DOWNLOADS_DIR is changed too.
       - /volume1/Video:/downloads
 
+      # Cho phép nút Update trong web tự pull/recreate container FHub (không cần container updater riêng).
+      - /var/run/docker.sock:/var/run/docker.sock
+
     networks:
       - fhub_net
 
