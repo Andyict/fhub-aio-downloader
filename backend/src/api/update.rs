@@ -127,16 +127,48 @@ async fn updater_available() -> bool {
     UnixStream::connect(DOCKER_SOCKET).await.is_ok()
 }
 
+
+async fn local_image_commit(image: &str) -> Option<String> {
+    let inspect_path = format!("/images/{}/json", urlencoding::encode(image));
+    let Ok((status, body)) = docker_request("GET", &inspect_path, None).await else { return None; };
+    if status != 200 { return None; }
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(&body) else { return None; };
+    value
+        .pointer("/Config/Labels/org.opencontainers.image.revision")
+        .and_then(|v| v.as_str())
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty() && v != "dev")
+}
+
+async fn pull_image_for_status(image: &str) {
+    if !Path::new(DOCKER_SOCKET).exists() || UnixStream::connect(DOCKER_SOCKET).await.is_err() {
+        return;
+    }
+    if !image.contains('/') {
+        return;
+    }
+    let pull_path = format!("/images/create?fromImage={}", urlencoding::encode(image));
+    let _ = tokio::time::timeout(Duration::from_secs(45), docker_request("POST", &pull_path, None)).await;
+}
+
 fn short_sha(value: &str) -> String {
     value.chars().take(12).collect()
 }
 
 async fn update_status(State(state): State<Arc<AppState>>) -> Result<Json<UpdateStatusResponse>, StatusCode> {
     let current = current_commit();
-    let (latest, latest_url, message) = match latest_commit(&state).await {
+    let image = update_image();
+    let (mut latest, latest_url, mut message) = match latest_commit(&state).await {
         Ok((sha, url)) => (Some(sha), url, "Đã kiểm tra update từ GitHub.".to_string()),
         Err(err) => (None, None, err),
     };
+    if latest.is_none() {
+        pull_image_for_status(&image).await;
+        if let Some(image_commit) = local_image_commit(&image).await {
+            latest = Some(image_commit);
+            message = "Đã kiểm tra update từ Docker image metadata.".to_string();
+        }
+    }
     let update_available = match (&current, &latest) {
         (Some(current), Some(latest)) => !latest.starts_with(current) && !current.starts_with(latest),
         (None, Some(_)) => true,
@@ -150,7 +182,7 @@ async fn update_status(State(state): State<Arc<AppState>>) -> Result<Json<Update
         latest_commit_url: latest_url,
         update_available,
         updater_available: updater_available().await,
-        image: update_image(),
+        image,
         container: container_name(),
         message,
     }))
