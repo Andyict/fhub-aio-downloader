@@ -159,7 +159,8 @@
   const adminUsers = $derived(users.filter((user) => user.role === "admin").length);
   const fshareIsVip = $derived(["VIP", "PREMIUM", "VIP ACCOUNT"].includes((fshareAccountRank || "").toUpperCase().trim()));
   const activeDownloadPreset = $derived(downloadPresets.find((preset) => preset.slots === Number(maxConcurrent) && preset.segments === Number(segmentsPerDownload))?.id ?? "custom");
-  const shouldShowUpdateBanner = $derived(Boolean(updateStatus?.update_available && updateStatus?.current_commit && updateStatus?.latest_commit));
+  const shouldShowUpdateBanner = $derived(Boolean(updateStatus?.update_available && updateStatus?.latest_commit && updateStatus?.current_commit !== updateStatus?.latest_commit));
+  const updateCurrentLabel = $derived(updateStatus?.current_commit || (uiLanguage === "vi" ? "bản local" : "local build"));
 
   onMount(() => {
     syncLanguage();
@@ -563,7 +564,7 @@
       <div class="update-icon"><span class="material-icons">system_update_alt</span></div>
       <div class="update-copy">
         <strong>{uiLanguage === "vi" ? "Có bản cập nhật mới" : "Update available"}</strong>
-        <small>{`Hiện tại ${updateStatus?.current_commit} · Mới nhất ${updateStatus?.latest_commit}`}</small>
+        <small>{`Hiện tại ${updateCurrentLabel} · Mới nhất ${updateStatus?.latest_commit}`}</small>
       </div>
       <div class="update-actions">
         <button type="button" class="primary-button update-now" onclick={runWebUpdate} disabled={updatingApp}>
