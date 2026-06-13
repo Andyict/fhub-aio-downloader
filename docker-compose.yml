@@ -26,32 +26,8 @@ services:
       - FHUB_SEGMENTS_PER_DOWNLOAD=16
       - FHUB_MAX_CONCURRENT=4
       - RUST_LOG=fhub=info,tower_http=info
-      - FHUB_UPDATER_URL=http://fhub-updater:8585
       - FHUB_CONTAINER_NAME=fhub
       - FHUB_UPDATE_IMAGE=ghcr.io/andyict/fhub-aio:latest
-
-  fhub-updater:
-    image: ghcr.io/andyict/fhub-aio:latest
-    container_name: fhub-updater
-    restart: unless-stopped
-    command: ["/app/fhub", "updater"]
-    networks:
-      - fhub_net
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    environment:
-      - TZ=Asia/Ho_Chi_Minh
-      - RUST_LOG=fhub=info,tower_http=info
-      - FHUB_CONTAINER_NAME=fhub
-      - FHUB_UPDATE_IMAGE=ghcr.io/andyict/fhub-aio:latest
-      - FHUB_UPDATER_BIND=0.0.0.0
-      - FHUB_UPDATER_PORT=8585
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8585/health"]
-      interval: 30s
-      timeout: 3s
-      retries: 3
-      start_period: 20s
 
 volumes:
   fhub_appdata:

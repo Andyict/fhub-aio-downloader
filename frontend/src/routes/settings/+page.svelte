@@ -317,7 +317,7 @@
 
   async function runWebUpdate() {
     if (!updateStatus?.updater_available) {
-      updateMessage = "Không có quyền update trực tiếp; đã copy lệnh update.";
+      updateMessage = "Đã copy lệnh update Docker. Chạy lệnh này trên NAS/Portainer để cập nhật FHub.";
       await copyUpdateCommand();
       return;
     }
@@ -333,7 +333,7 @@
       const result = response.ok ? await response.json() : { success: false, message: await response.text() };
       const rawMessage = result.message || (result.success ? "Đã bắt đầu cập nhật." : "Cập nhật thất bại.");
       updateMessage = /permission denied|docker socket|var\/run\/docker\.sock/i.test(rawMessage)
-        ? "Không có quyền update trực tiếp; hãy dùng lệnh update đã copy."
+        ? "Đã copy lệnh update Docker. Chạy lệnh này trên NAS/Portainer để cập nhật FHub."
         : rawMessage;
       if (result.success) setTimeout(() => window.location.reload(), 12000);
     } catch (error) {

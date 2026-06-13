@@ -55,22 +55,6 @@ services:
       - FHUB_SEGMENTS_PER_DOWNLOAD=16
       - FHUB_MAX_CONCURRENT=4
       - RUST_LOG=fhub=info,tower_http=info
-      - FHUB_UPDATER_URL=http://fhub-updater:8585
-      - FHUB_CONTAINER_NAME=fhub
-      - FHUB_UPDATE_IMAGE=ghcr.io/andyict/fhub-aio:latest
-
-  fhub-updater:
-    image: ghcr.io/andyict/fhub-aio:latest
-    container_name: fhub-updater
-    restart: unless-stopped
-    command: ["/app/fhub", "updater"]
-    networks:
-      - fhub_net
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    environment:
-      - TZ=Asia/Ho_Chi_Minh
-      - RUST_LOG=fhub=info,tower_http=info
       - FHUB_CONTAINER_NAME=fhub
       - FHUB_UPDATE_IMAGE=ghcr.io/andyict/fhub-aio:latest
 
@@ -108,17 +92,11 @@ docker compose pull
 docker compose up -d
 ```
 
-### Web update button
+### Web update notice
 
-In **Settings**, FHub checks GitHub for a newer commit/image. When one is available, the web UI shows an **Update now** button.
+In **Settings**, FHub checks GitHub for a newer image. When one is available, the web UI shows a compact update notice and copies the Docker update command for you.
 
-For the button to update the container automatically, use the helper-based compose setup shown above. The `fhub` service does **not** need to mount `/var/run/docker.sock` directly; only the `fhub-updater` helper does.
-
-After updating your compose file, run:
-
-```bash
-docker compose up -d
-```
+FHub intentionally ships as a single-container app. It does not require a separate updater helper container for normal use.
 
 ### Option 2: Auto-update with Watchtower
 
