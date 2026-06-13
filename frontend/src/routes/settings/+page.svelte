@@ -558,13 +558,7 @@
   </section>
 
   {#if updateStatus?.update_available}
-    <section class="update-banner available">
-      <div class="update-icon"><span class="material-icons">system_update_alt</span></div>
-      <div class="update-copy">
-        <strong>Có bản FHub mới trên GitHub</strong>
-        <small>Hiện tại: {updateStatus.current_commit || updateStatus.current_version || "không rõ"} · Mới nhất: {updateStatus.latest_commit || "đang kiểm tra"}</small>
-        {#if updateMessage}<p>{updateMessage}</p>{/if}
-      </div>
+    <section class="update-banner available compact-update">
       <div class="update-actions">
         <button type="button" class="primary-button update-now" onclick={runWebUpdate} disabled={updatingApp}>{updatingApp ? "Đang update..." : "Update"}</button>
       </div>
@@ -899,6 +893,7 @@
   .overview-strip span { font-size: .82rem; }
   .update-banner { display: grid; grid-template-columns: 52px minmax(0,1fr) auto; align-items: center; gap: .9rem; padding: .95rem; border-radius: 18px; }
   .update-banner.available { border-color: rgba(34,197,94,.32); background: radial-gradient(circle at 0 0, rgba(34,197,94,.16), transparent 34%), linear-gradient(180deg, rgba(20,26,42,.94), rgba(9,12,21,.88)); }
+  .compact-update { display: flex; justify-content: flex-end; padding: .72rem; }
   .update-icon { width: 52px; height: 52px; display: grid; place-items: center; border-radius: 16px; color: #080a12; background: linear-gradient(135deg,#86efac,#f8c14a); }
   .update-icon .material-icons { color: #080a12; }
   .update-copy strong, .update-copy small, .update-copy p { display: block; }
@@ -1085,7 +1080,9 @@
     .overview-strip { display: none; }
     .status-line { display: none; }
     .download-meter, .user-row, .storage-map, .update-banner { grid-template-columns: 1fr; }
+    .compact-update { justify-content: stretch; }
     .update-actions { grid-template-columns: 1fr 1fr; min-width: 0; }
+    .compact-update .update-actions { grid-template-columns: 1fr; }
     .download-preset-grid { grid-template-columns: 1fr; }
     .download-preset-grid button { min-height: 64px; }
     .compact-download-fields { grid-template-columns: 1fr; }
