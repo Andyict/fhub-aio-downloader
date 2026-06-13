@@ -257,7 +257,32 @@ async fn run_update() -> Result<Json<UpdateRunResponse>, StatusCode> {
         }
     }
 
-    perform_docker_update(update_image(), container_name()).await
+    if !updater_available().await {
+        return Ok(Json(UpdateRunResponse {
+            success: false,
+            message: "Chưa bật web updater. Cần mount /var/run/docker.sock vào container FHub rồi restart một lần.".to_string(),
+            logs: vec![],
+        }));
+    }
+
+    let image = update_image();
+    let container = container_name();
+    tokio::spawn(async move {
+        if let Ok(result) = perform_docker_update(image, container).await {
+            let result = result.0;
+            if result.success {
+                tracing::info!("FHub background update finished: {}", result.message);
+            } else {
+                tracing::error!("FHub background update failed: {} logs={:?}", result.message, result.logs);
+            }
+        }
+    });
+
+    Ok(Json(UpdateRunResponse {
+        success: true,
+        message: "Đã bắt đầu cập nhật FHub. Ứng dụng sẽ tự khởi động lại sau ít phút.".to_string(),
+        logs: vec!["Update is running in background".to_string()],
+    }))
 }
 
 async fn rollback_update(container: &str, backup: &str, logs: &mut Vec<String>) {
