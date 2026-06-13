@@ -159,6 +159,7 @@
   const adminUsers = $derived(users.filter((user) => user.role === "admin").length);
   const fshareIsVip = $derived(["VIP", "PREMIUM", "VIP ACCOUNT"].includes((fshareAccountRank || "").toUpperCase().trim()));
   const activeDownloadPreset = $derived(downloadPresets.find((preset) => preset.slots === Number(maxConcurrent) && preset.segments === Number(segmentsPerDownload))?.id ?? "custom");
+  const shouldShowUpdateBanner = $derived(Boolean(updateStatus?.update_available && updateStatus?.current_commit && updateStatus?.latest_commit));
 
   onMount(() => {
     syncLanguage();
@@ -557,10 +558,18 @@
     <article><span class="material-icons">dns</span><div><strong>Server</strong><small>{`${settings.server_host}:${settings.server_port}`}</small></div></article>
   </section>
 
-  {#if updateStatus?.update_available}
-    <section class="update-banner available compact-update">
+  {#if shouldShowUpdateBanner}
+    <section class="update-banner available" aria-label="FHub update available">
+      <div class="update-icon"><span class="material-icons">system_update_alt</span></div>
+      <div class="update-copy">
+        <strong>{uiLanguage === "vi" ? "Có bản cập nhật mới" : "Update available"}</strong>
+        <small>{`Hiện tại ${updateStatus?.current_commit} · Mới nhất ${updateStatus?.latest_commit}`}</small>
+      </div>
       <div class="update-actions">
-        <button type="button" class="primary-button update-now" onclick={runWebUpdate} disabled={updatingApp}>{updatingApp ? "Đang update..." : "Update"}</button>
+        <button type="button" class="primary-button update-now" onclick={runWebUpdate} disabled={updatingApp}>
+          <span class="material-icons">upgrade</span>
+          {updatingApp ? "Đang update..." : "Cập nhật"}
+        </button>
       </div>
     </section>
   {/if}
@@ -891,22 +900,25 @@
   .overview-strip small { display: block; font-weight: 850; }
   .overview-strip strong { display: block; margin: .35rem 0 .18rem; color: #fff; font-size: 2rem; line-height: 1; letter-spacing: -.05em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .overview-strip span { font-size: .82rem; }
-  .update-banner { display: grid; grid-template-columns: 52px minmax(0,1fr) auto; align-items: center; gap: .9rem; padding: .95rem; border-radius: 18px; }
-  .update-banner.available { border-color: rgba(34,197,94,.32); background: radial-gradient(circle at 0 0, rgba(34,197,94,.16), transparent 34%), linear-gradient(180deg, rgba(20,26,42,.94), rgba(9,12,21,.88)); }
-  .compact-update { display: flex; justify-content: flex-end; padding: .72rem; }
-  .update-icon { width: 52px; height: 52px; display: grid; place-items: center; border-radius: 16px; color: #080a12; background: linear-gradient(135deg,#86efac,#f8c14a); }
-  .update-icon .material-icons { color: #080a12; }
+  .update-banner { position: relative; display: grid; grid-template-columns: 42px minmax(0,1fr) auto; align-items: center; gap: .78rem; overflow: hidden; padding: .72rem .78rem; border-radius: 18px; }
+  .update-banner::before { content: ""; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(circle at 9% 0%, rgba(248,193,74,.18), transparent 34%), radial-gradient(circle at 100% 0%, rgba(167,139,250,.15), transparent 32%); opacity: .9; }
+  .update-banner.available { border-color: rgba(248,193,74,.28); background: linear-gradient(180deg, rgba(18,24,39,.88), rgba(8,11,20,.82)); box-shadow: 0 14px 36px rgba(0,0,0,.2), inset 0 1px 0 rgba(255,255,255,.04); }
+  .update-banner > * { position: relative; z-index: 1; }
+  .update-icon { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 14px; color: #080a12; background: linear-gradient(135deg,#f8d983 0%,#e4c0d2 48%,#b9a7ff 100%); box-shadow: 0 10px 24px rgba(167,139,250,.16); }
+  .update-icon .material-icons { color: #080a12; font-size: 1.35rem; }
+  .update-copy { min-width: 0; display: grid; gap: .14rem; }
   .update-copy strong, .update-copy small, .update-copy p { display: block; }
-  .update-copy strong { color: #fff; font-size: 1rem; }
-  .update-copy small { margin-top: .18rem; color: rgba(226,232,240,.68); font-weight: 850; }
+  .update-copy strong { color: #fff; font-size: .96rem; letter-spacing: -.02em; }
+  .update-copy small { color: rgba(226,232,240,.58); font-size: .78rem; font-weight: 820; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .update-copy p { margin-top: .32rem; color: rgba(226,232,240,.62); font-size: .82rem; line-height: 1.35; }
   .update-warning code, .update-hint code { padding: .08rem .28rem; border-radius: 6px; background: rgba(0,0,0,.32); color: #fde68a; }
   .update-command-box { margin-top: .55rem; display: grid; grid-template-columns: minmax(0,1fr) auto; gap: .45rem; align-items: center; max-width: 560px; padding: .42rem; border: 1px solid rgba(148,163,184,.14); border-radius: 12px; background: rgba(2,6,23,.34); }
   .update-command-box code { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #fde68a; font-size: .8rem; }
   .update-command-box button { min-height: 34px; padding: 0 .75rem; border: 0; border-radius: 10px; color: #08111f; background: linear-gradient(135deg,#f8c14a,#c4b5fd); font-weight: 950; }
   .update-hint { color: rgba(226,232,240,.54) !important; }
-  .update-actions { display: grid; gap: .5rem; min-width: 150px; }
-  .update-now { min-height: 44px; }
+  .update-actions { display: grid; gap: .5rem; min-width: 122px; justify-items: end; }
+  .update-now { min-height: 40px; display: inline-flex; align-items: center; justify-content: center; gap: .35rem; padding: 0 .95rem; border: 0; color: #080a12; background: linear-gradient(135deg,#f8d983 0%,#e4c0d2 48%,#b9a7ff 100%); box-shadow: 0 10px 24px rgba(167,139,250,.18); }
+  .update-now .material-icons { color: #080a12; font-size: 1.05rem; }
   .status-line { min-height: 52px; display: flex; align-items: center; padding: .9rem 1rem; border-radius: 16px; }
   .console-grid, .tab-grid { display: grid; gap: 1rem; align-items: start; }
   .console-grid { grid-template-columns: minmax(330px,.95fr) minmax(360px,1.05fr) minmax(300px,.8fr); }

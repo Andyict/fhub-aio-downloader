@@ -94,7 +94,24 @@ async fn updater_run(Json(payload): Json<UpdaterRequest>) -> Result<Json<api::up
     let container = payload.container
         .or_else(|| std::env::var("FHUB_CONTAINER_NAME").ok())
         .unwrap_or_else(|| "fhub".to_string());
-    api::update::perform_docker_update(image, container).await
+
+    // The updater is called by the app container that is about to be stopped.
+    // If we keep the HTTP request open while replacing that caller, Docker may
+    // tear down the client connection and cancel the update future mid-flight.
+    // Detach the actual Docker update so the helper owns it independently, then
+    // return immediately to the UI.
+    tokio::spawn(async move {
+        match api::update::perform_docker_update(image, container).await {
+            Ok(result) => tracing::info!(success = result.success, message = %result.message, "Detached FHUB update finished"),
+            Err(status) => tracing::error!(?status, "Detached FHUB update failed before producing a response"),
+        }
+    });
+
+    Ok(Json(api::update::UpdateRunResponse {
+        success: true,
+        message: "Đã bắt đầu cập nhật FHub. Hệ thống sẽ tự khởi động lại trong giây lát.".to_string(),
+        logs: vec!["Update detached to updater helper".to_string()],
+    }))
 }
 
 async fn run_updater() {
