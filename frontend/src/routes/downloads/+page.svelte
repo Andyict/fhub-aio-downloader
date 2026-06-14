@@ -59,6 +59,8 @@
     size: number;
     is_directory?: boolean;
     quality?: string;
+    season?: number;
+    episode?: number;
   };
 
   type LinkPreview = {
@@ -78,6 +80,8 @@
   let language = $state<"vi" | "en">("vi");
   let checkLoading = $state(false);
   let downloadLoading = $state(false);
+  let autoTrackLoading = $state(false);
+  let autoTrackEnabled = $state(false);
   let preview = $state<LinkPreview | null>(null);
   let selectedUrls = $state<Set<string>>(new Set());
   let pendingDownloadItems = $state<PreviewItem[]>([]);
@@ -330,6 +334,7 @@
     rememberLink(clean);
     checkLoading = true;
     preview = null;
+    autoTrackEnabled = false;
     selectedUrls = new Set();
     status = "Đang check link FShare, chưa tải...";
     try {
@@ -341,6 +346,7 @@
       }, 35000);
       if (!res.ok) throw new Error(await safeText(res));
       preview = await res.json();
+      autoTrackEnabled = false;
       rememberLink(clean, preview?.folder_name || preview?.items?.find((item) => !item.is_directory)?.name);
       showDownloadModeHelp = false;
       selectAllPreview();
@@ -359,6 +365,43 @@
 
   function confirmPreviewFromPanel() {
     openDownloadConfirm();
+  }
+
+  async function createAutoTrackFromPreview() {
+    if (!preview || !(preview.folder_code || isFolderPreview(preview.resolved_url) || isFolderPreview(preview.original_url))) {
+      status = "Auto Track chỉ dùng cho thư mục FShare phim bộ.";
+      return;
+    }
+    if (!downloadablePreviewItems.length) {
+      status = "Thư mục chưa có file để theo dõi.";
+      return;
+    }
+    autoTrackLoading = true;
+    try {
+      const firstSeason = downloadablePreviewItems.find((item) => item.season)?.season;
+      const res = await fetchWithTimeout("/api/auto-track", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          title: preview.folder_name || downloadablePreviewItems[0]?.name || "FShare series",
+          folder_url: preview.resolved_url || preview.original_url,
+          folder_code: (preview as any).folder_code,
+          media_type: "tv",
+          category: "tv",
+          season: firstSeason,
+          batch_name: preview.folder_name || "Auto Track series",
+          check_now: false,
+        }),
+      }, 15000);
+      if (!res.ok) throw new Error(await safeText(res));
+      autoTrackEnabled = true;
+      status = "Đã bật Auto Track cho thư mục này. Các file đang chọn vẫn chỉ tải khi bấm Download và xác nhận.";
+    } catch (err) {
+      status = `Bật Auto Track thất bại: ${messageOf(err)}`;
+    } finally {
+      autoTrackLoading = false;
+    }
   }
 
   function openDownloadConfirm() {
@@ -819,7 +862,12 @@
       </div>
       <div class="preview-confirm">
         <span>{selectedPreviewItems.length} file đã chọn · {formatBytes(selectedPreviewSize)}</span>
-        <button type="button" onclick={confirmPreviewFromPanel} disabled={checkLoading || downloadLoading || !selectedPreviewItems.length}><span class="material-icons">download</span>Download</button>
+        <div class="preview-actions">
+          {#if preview.folder_code || isFolderPreview(preview.resolved_url) || isFolderPreview(preview.original_url)}
+            <button class="track-button" class:active={autoTrackEnabled} type="button" onclick={createAutoTrackFromPreview} disabled={checkLoading || downloadLoading || autoTrackLoading || autoTrackEnabled} aria-label="Auto Track" title={autoTrackEnabled ? "Đã bật Auto Track" : "Bật Auto Track"}><span class="material-icons">sync</span></button>
+          {/if}
+          <button type="button" onclick={confirmPreviewFromPanel} disabled={checkLoading || downloadLoading || !selectedPreviewItems.length}><span class="material-icons">download</span>Download</button>
+        </div>
       </div>
     </section>
   {/if}
@@ -938,7 +986,7 @@
   .dock-download{background:linear-gradient(135deg,#f8c14a,#a78bfa);color:#080a12;border:0}
 }
 
-@keyframes float-card{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}@keyframes beam-flow{from{background-position:0 0}to{background-position:240px 0}}@media(max-width:900px){.download-hero{grid-template-columns:1fr}.speed-orb{justify-self:start}.hero-visual{max-width:520px}}@media(max-width:720px){.download-hero{display:none}.link-panel{grid-template-columns:24px minmax(0,1fr) 44px}.link-panel .check-link-button{grid-column:1/3}.link-panel .history-button{grid-column:3/4}.preview-summary,.preview-confirm{align-items:stretch;flex-direction:column}.preview-tools{width:100%}.preview-tools button,.preview-confirm button{width:100%}.download-list{grid-template-columns:1fr}.download-card{grid-template-columns:74px minmax(0,1fr) 38px}.poster{width:74px;height:96px}.card-actions button{width:38px;height:38px}}
+@keyframes float-card{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}@keyframes beam-flow{from{background-position:0 0}to{background-position:240px 0}}.preview-actions{display:grid;grid-template-columns:auto minmax(0,1fr);gap:.5rem;align-items:center}.preview-actions .track-button{width:46px;min-width:46px;padding:0;border-radius:14px;color:#94a3b8!important;background:rgba(255,255,255,.07)!important;border:1px solid rgba(148,163,184,.18)!important;box-shadow:none}.preview-actions .track-button .material-icons{color:#94a3b8}.preview-actions .track-button.active{color:#080a12!important;background:linear-gradient(135deg,#f8c14a,#a78bfa)!important;border:0!important;box-shadow:0 14px 34px rgba(167,139,250,.22)}.preview-actions .track-button.active .material-icons{color:#080a12}.preview-actions button:not(.track-button){width:100%}@media(max-width:900px){.download-hero{grid-template-columns:1fr}.speed-orb{justify-self:start}.hero-visual{max-width:520px}}@media(max-width:720px){.download-hero{display:none}.link-panel{grid-template-columns:24px minmax(0,1fr) 44px}.link-panel .check-link-button{grid-column:1/3}.link-panel .history-button{grid-column:3/4}.preview-summary,.preview-confirm{align-items:stretch;flex-direction:column}.preview-actions{grid-template-columns:46px minmax(0,1fr);width:100%}.preview-tools{width:100%}.preview-tools button{width:100%}.preview-confirm button:not(.track-button){width:100%}.download-list{grid-template-columns:1fr}.download-card{grid-template-columns:74px minmax(0,1fr) 38px}.poster{width:74px;height:96px}.card-actions button{width:38px;height:38px}}
 
 
 /* Richer download state cards */

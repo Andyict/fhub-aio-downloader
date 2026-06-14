@@ -59,6 +59,7 @@ pub struct AppState {
     pub download_service: Arc<services::DownloadService>,
     pub tmdb_service: Arc<services::TmdbService>,
     pub folder_cache_service: Arc<services::FolderCacheService>,
+    pub auto_track_service: Arc<services::AutoTrackService>,
     pub tx_broadcast: tokio::sync::broadcast::Sender<downloader::task::DownloadTask>,
     pub config: config::Config,
     pub db: Arc<db::Db>,
@@ -278,6 +279,7 @@ async fn main() {
     
     // Create FolderCacheService for source caching.
     let folder_cache_service = Arc::new(services::FolderCacheService::new(Arc::clone(&db), Arc::clone(&tmdb_service)));
+    let auto_track_service = Arc::new(services::AutoTrackService::new(Arc::clone(&db), Arc::clone(&download_orchestrator)));
     
     let app_config = config.clone();
 
@@ -287,6 +289,7 @@ async fn main() {
         download_service,
         tmdb_service,
         folder_cache_service: Arc::clone(&folder_cache_service),
+        auto_track_service: Arc::clone(&auto_track_service),
         tx_broadcast,
         config: app_config,
         db,
@@ -319,6 +322,7 @@ async fn main() {
         .nest("/newznab/api", api::indexer::router())
         .nest("/api/media", api::media::router())
         .nest("/api/folder-source", api::folder_source::router())
+        .nest("/api/auto-track", api::auto_track::router())
         .layer(middleware::from_fn_with_state(Arc::clone(&state), api::auth::auth_required));
 
     // Build router.
@@ -366,6 +370,17 @@ async fn main() {
                     tracing::error!("[FHUB-SOURCE-CACHE] Daily sync failed: {}", e);
                 }
             }
+        }
+    });
+
+    // Spawn auto-track background watcher. Checks due TV folders every minute;
+    // each track's own interval defaults to 1 hour.
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(Duration::from_secs(60));
+        interval.tick().await;
+        loop {
+            interval.tick().await;
+            auto_track_service.check_due_tracks().await;
         }
     });
 

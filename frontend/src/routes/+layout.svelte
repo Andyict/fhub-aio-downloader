@@ -19,12 +19,14 @@
     vi: [
       { href: "/discover", label: "Khám phá", icon: "explore" },
       { href: "/downloads", label: "Tải xuống", icon: "download" },
+      { href: "/auto-track", label: "Auto Track", icon: "sync" },
       { href: "/favorites", label: "Đã lưu", icon: "bookmark" },
       { href: "/settings", label: "Cài đặt", icon: "settings" },
     ],
     en: [
       { href: "/discover", label: "Discovery", icon: "explore" },
       { href: "/downloads", label: "Download", icon: "download" },
+      { href: "/auto-track", label: "Auto Track", icon: "sync" },
       { href: "/favorites", label: "Bookmark", icon: "bookmark" },
       { href: "/settings", label: "Setting", icon: "settings" },
     ],
@@ -37,6 +39,7 @@
       "/favorites": { title: "Đã lưu", subtitle: "Nội dung đã bookmark", icon: "bookmark" },
       "/history": { title: "Lịch sử", subtitle: "Lịch sử xem, tải và tìm kiếm", icon: "history" },
       "/downloads": { title: "Tải xuống", subtitle: "Hàng đợi tải và tiến trình", icon: "download_for_offline" },
+      "/auto-track": { title: "Auto Track", subtitle: "Theo dõi phim bộ và tự tải tập mới", icon: "sync" },
       "/settings": { title: "Cài đặt", subtitle: "Cấu hình và tài khoản", icon: "admin_panel_settings" },
     },
     en: {
@@ -45,6 +48,7 @@
       "/favorites": { title: "Bookmark", subtitle: "Saved content", icon: "bookmark" },
       "/history": { title: "History", subtitle: "Watch, download and search history", icon: "history" },
       "/downloads": { title: "Downloads", subtitle: "Queue and progress", icon: "download_for_offline" },
+      "/auto-track": { title: "Auto Track", subtitle: "Track TV folders and download new episodes", icon: "sync" },
       "/settings": { title: "Settings", subtitle: "Config and accounts", icon: "admin_panel_settings" },
     },
   };
@@ -1082,10 +1086,12 @@
       bottom: 10px;
       z-index: 80;
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 6px;
-      min-height: 66px;
-      padding: 7px 8px;
+      grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+      grid-auto-flow: column;
+      grid-auto-columns: minmax(0, 1fr);
+      gap: 4px;
+      min-height: 58px;
+      padding: 6px;
       border-radius: 18px;
       background: rgba(7, 10, 18, 0.92);
       border: 1px solid rgba(148, 163, 184, 0.16);
@@ -1097,19 +1103,19 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 3px;
+      gap: 2px;
       min-width: 0;
-      min-height: 52px;
-      padding: 0 2px;
-      border-radius: 12px;
-      font-size: clamp(0.5rem, 2.15vw, 0.62rem);
-      line-height: 1.05;
+      min-height: 46px;
+      padding: 0 1px;
+      border-radius: 11px;
+      font-size: clamp(0.46rem, 1.85vw, 0.58rem);
+      line-height: 1;
       text-align: center;
       white-space: nowrap;
     }
 
     .fhub-bottom-nav a .material-icons {
-      font-size: 1.35rem;
+      font-size: 1.18rem;
       line-height: 1;
     }
 

@@ -135,6 +135,8 @@
   let fshareLoginMessage = $state("");
   let fsharePanelOpen = $state(false);
   let downloadAdvancedOpen = $state(false);
+  let autoTrackIntervalSecs = $state(3600);
+  let autoTrackSaving = $state(false);
   let status = $state("Đang tải cấu hình thật từ FHUB...");
   let saving = $state(false);
   let userSaving = $state(false);
@@ -237,12 +239,13 @@
   async function refreshAll() {
     if (!isAdminUser) return;
     try {
-      const [settingsResponse, downloadsResponse, accountsResponse, healthResponse, usersResponse] = await Promise.all([
+      const [settingsResponse, downloadsResponse, accountsResponse, healthResponse, usersResponse, autoTrackResponse] = await Promise.all([
         fetch("/api/settings"),
         fetch("/api/settings/downloads"),
         fetch("/api/accounts"),
         fetch("/api/health"),
         fetch("/api/auth/users", { credentials: "include" }),
+        fetch("/api/settings/auto-track", { credentials: "include" }),
       ]);
 
       const appSettings = settingsResponse.ok ? await settingsResponse.json() : null;
@@ -251,7 +254,9 @@
       const accountList = Array.isArray(accountPayload) ? accountPayload : (accountPayload.accounts || []);
       const health = healthResponse.ok ? await healthResponse.json() : null;
       const usersPayload = usersResponse.ok ? await usersResponse.json() : { users: [] };
+      const autoTrackSettings = autoTrackResponse.ok ? await autoTrackResponse.json() : null;
       users = Array.isArray(usersPayload) ? usersPayload : (usersPayload.users || []);
+      autoTrackIntervalSecs = Number(autoTrackSettings?.check_interval_secs || autoTrackIntervalSecs);
 
       settings = {
         max_concurrent_downloads: downloadSettings?.max_concurrent ?? appSettings?.downloads?.max_concurrent ?? settings.max_concurrent_downloads,
@@ -403,6 +408,32 @@
   function applyDownloadPreset(slots: number, segments: number) {
     maxConcurrent = slots;
     segmentsPerDownload = segments;
+  }
+
+  async function saveAutoTrackSettings() {
+    autoTrackSaving = true;
+    try {
+      const response = await fetch("/api/settings/auto-track", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ check_interval_secs: Number(autoTrackIntervalSecs) }),
+      });
+      const result = response.ok ? await response.json() : { success: false, message: await response.text() };
+      if (!response.ok || result.success === false) throw new Error(result.message || "Lưu Auto Track thất bại");
+      status = `Đã lưu Auto Track: quét mỗi ${formatAutoTrackInterval(autoTrackIntervalSecs)}.`;
+    } catch (error) {
+      status = error instanceof Error ? error.message : "Lưu Auto Track thất bại";
+    } finally {
+      autoTrackSaving = false;
+    }
+  }
+
+  function formatAutoTrackInterval(value: number) {
+    const secs = Number(value || 3600);
+    if (secs < 3600) return `${Math.round(secs / 60)} phút`;
+    const hours = secs / 3600;
+    return `${Number.isInteger(hours) ? hours : hours.toFixed(1)} giờ`;
   }
 
   async function saveSettings() {
@@ -575,6 +606,7 @@
       <article class="panel wide ui-mode-panel">{@render UiModePanel()}</article>
       <article class="panel wide fshare-overview-panel">{@render ServicePanel()}</article>
       <article class="panel download-overview-panel">{@render DownloadPanel()}</article>
+      <article class="panel autotrack-overview-panel">{@render AutoTrackPanel()}</article>
     {:else if activeTab === "accounts"}
       <article class="panel users-panel">{@render UsersPanel()}</article>
     {:else if activeTab === "activity"}
@@ -666,6 +698,34 @@
       <button type="button" class="primary-button compact-save" onclick={saveSettings} disabled={saving}>{saving ? "Đang lưu..." : "Lưu cấu hình"}</button>
     </div>
   {/if}
+{/snippet}
+
+{#snippet AutoTrackPanel()}
+  <div class="panel-title compact-title">
+    <div><h2>Auto Track</h2></div>
+    <span class="panel-chip">{formatAutoTrackInterval(autoTrackIntervalSecs)}</span>
+  </div>
+  <div class="autotrack-box">
+    <div class="autotrack-copy">
+      <span class="material-icons">sync</span>
+      <div>
+        <strong>Chu kỳ theo dõi phim bộ</strong>
+        <small>FHUB sẽ tự quét các folder Auto Track theo thời gian này. Track mới tạo cũng dùng giá trị này.</small>
+      </div>
+    </div>
+    <div class="autotrack-presets" role="group" aria-label="Auto Track interval">
+      {#each [900, 1800, 3600, 10800, 21600] as interval}
+        <button type="button" class:active={Number(autoTrackIntervalSecs) === interval} onclick={() => autoTrackIntervalSecs = interval}>
+          {formatAutoTrackInterval(interval)}
+        </button>
+      {/each}
+    </div>
+    <label class="autotrack-slider">
+      <span>Tuỳ chỉnh <small>{formatAutoTrackInterval(autoTrackIntervalSecs)}</small></span>
+      <input type="range" min="300" max="21600" step="300" bind:value={autoTrackIntervalSecs} />
+    </label>
+    <button type="button" class="primary-button compact-save" onclick={saveAutoTrackSettings} disabled={autoTrackSaving}>{autoTrackSaving ? "Đang lưu..." : "Lưu Auto Track"}</button>
+  </div>
 {/snippet}
 
 {#snippet FavoritesPanel()}
@@ -915,6 +975,7 @@
   .ui-mode-panel { margin-bottom: .35rem; }
   .fshare-overview-panel { margin-top: .15rem; margin-bottom: .15rem; }
   .download-overview-panel { margin-top: .35rem; border-color: rgba(167,139,250,.22); }
+  .autotrack-overview-panel { border-color: rgba(56,189,248,.22); }
   .panel { border-radius: 22px; padding: 1.15rem; }
   .ui-mode-hint { display: none; }
   .simple-mode-title { margin-bottom: .7rem; }
@@ -950,6 +1011,18 @@
   .advanced-toggle .material-icons { color: #c4b5fd; transition: transform .18s ease; }
   .advanced-toggle.open .material-icons:last-child { transform: rotate(180deg); }
   .download-advanced-box { margin-top: .75rem; padding: .8rem; border-radius: 18px; border: 1px solid rgba(148,163,184,.14); background: rgba(6,9,17,.42); }
+  .autotrack-box { display: grid; gap: .8rem; }
+  .autotrack-copy { display: grid; grid-template-columns: 42px minmax(0,1fr); gap: .7rem; align-items: center; padding: .75rem; border-radius: 16px; border: 1px solid rgba(56,189,248,.15); background: rgba(56,189,248,.07); }
+  .autotrack-copy > .material-icons { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 14px; color: #080a12; background: linear-gradient(135deg,#38bdf8,#a78bfa); }
+  .autotrack-copy strong, .autotrack-copy small { display: block; }
+  .autotrack-copy strong { color: #fff; }
+  .autotrack-copy small { margin-top: .18rem; color: #aab4c3; line-height: 1.35; }
+  .autotrack-presets { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: .42rem; }
+  .autotrack-presets button { min-height: 38px; padding: 0 .35rem; border-radius: 12px; border: 1px solid rgba(148,163,184,.15); color: #e2e8f0; background: rgba(255,255,255,.055); font-weight: 900; }
+  .autotrack-presets button.active { color: #080a12; border: 0; background: linear-gradient(135deg,#f8c14a,#a78bfa); }
+  .autotrack-slider { display: grid; gap: .45rem; padding: .72rem; border-radius: 14px; background: rgba(255,255,255,.04); }
+  .autotrack-slider span { display: flex; justify-content: space-between; gap: .7rem; color: #f8fafc; font-weight: 900; }
+  .autotrack-slider small { color: #f8c14a; }
   .download-preset-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .55rem; }
   .download-preset-grid button { min-height: 82px; display: grid; align-content: center; gap: .14rem; padding: .55rem .45rem; border-radius: 15px; text-align: left; color: #e5eef7; background: rgba(255,255,255,.045); border: 1px solid rgba(148,163,184,.16); }
   .download-preset-grid button.active { color: #080a12; border-color: transparent; background: linear-gradient(135deg,#f8c14a,#a78bfa); box-shadow: 0 14px 36px rgba(167,139,250,.18); }

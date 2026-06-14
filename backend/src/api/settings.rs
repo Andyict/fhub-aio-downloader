@@ -16,6 +16,8 @@ pub fn router() -> Router<Arc<AppState>> {
         .route("/indexer", get(get_indexer_settings))
         .route("/indexer", put(update_indexer_settings))
         .route("/indexer/generate-key", get(generate_api_key))
+        .route("/auto-track", get(get_auto_track_settings))
+        .route("/auto-track", put(update_auto_track_settings))
 }
 
 #[derive(Serialize)]
@@ -42,6 +44,11 @@ struct IndexerSettings {
     enabled: bool,
     api_key: String,
     indexer_url: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct AutoTrackSettings {
+    check_interval_secs: i64,
 }
 
 #[derive(Serialize)]
@@ -144,6 +151,27 @@ async fn update_indexer_settings(
         success: true,
         message: Some("API settings updated successfully".to_string()),
     })
+}
+
+async fn get_auto_track_settings(State(state): State<Arc<AppState>>) -> Json<AutoTrackSettings> {
+    let check_interval_secs = state.db.get_setting("auto_track_check_interval_secs")
+        .ok()
+        .flatten()
+        .and_then(|v| v.parse::<i64>().ok())
+        .unwrap_or(3600)
+        .clamp(300, 86400);
+    Json(AutoTrackSettings { check_interval_secs })
+}
+
+async fn update_auto_track_settings(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<AutoTrackSettings>,
+) -> Json<ActionResponse> {
+    let value = payload.check_interval_secs.clamp(300, 86400);
+    if let Err(e) = state.db.save_setting("auto_track_check_interval_secs", &value.to_string()) {
+        return Json(ActionResponse { success: false, message: Some(format!("Failed to save Auto Track settings: {}", e)) });
+    }
+    Json(ActionResponse { success: true, message: Some("Auto Track settings updated successfully".to_string()) })
 }
 
 async fn generate_api_key() -> Json<GenerateKeyResponse> {

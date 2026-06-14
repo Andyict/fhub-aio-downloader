@@ -103,6 +103,10 @@
   let selectedLinks = $state<FshareResult[]>([]);
   let selectedDownloadUrls = $state<string[]>([]);
   let selectedLinkIndex = $state<number | null>(null);
+  let selectedSourceFolderLink = $state<FshareResult | null>(null);
+  let discoveryAutoTrackLoading = $state(false);
+  let discoveryAutoTrackEnabled = $state(false);
+  let discoveryAutoTrackId = $state<string | null>(null);
   let seriesMode = $state(false);
   let showSeriesHelp = $state(false);
   let selectedCast = $state<CastMember[]>([]);
@@ -715,6 +719,9 @@
     setSelectedImages(item.img ? [item.img] : []);
     selectedLinks = [];
     selectedDownloadUrls = [];
+    selectedSourceFolderLink = null;
+    discoveryAutoTrackEnabled = false;
+    discoveryAutoTrackId = null;
     selectedLinkIndex = null;
     selectedCast = [];
     relatedFilms = [];
@@ -1017,6 +1024,7 @@
         const payload = await response.json();
         rawLinks = payload.results || [];
       }
+      selectedSourceFolderLink = rawLinks.find((link) => link.url && /fshare\.vn\/folder\//i.test(link.url)) || null;
       if (usedExactSource) {
         message = "Đã lấy đúng folder nguồn, đang tách các tập trong folder...";
         selectedLinks = dedupeDownloadLinks(await expandFolderLinks(rawLinks));
@@ -1025,6 +1033,8 @@
       }
       selectedLinkIndex = null;
       selectedDownloadUrls = selectedLinks.map((link) => link.url || "").filter(Boolean);
+      discoveryAutoTrackEnabled = false;
+      discoveryAutoTrackId = null;
       seriesMode = selectedLinks.length > 1 || selectedFilm?.type === "TV";
       const removed = rawLinks.length - selectedLinks.length;
       message = selectedLinks.length
@@ -1035,6 +1045,7 @@
       message = msg;
       selectedLinks = [];
       selectedDownloadUrls = [];
+      selectedSourceFolderLink = null;
       selectedLinkIndex = null;
     } finally {
       loadingLinks = false;
@@ -1086,6 +1097,69 @@
 
   function clearSelectedDownloads() {
     selectedDownloadUrls = [];
+  }
+
+  async function toggleAutoTrackFromDiscovery() {
+    if (discoveryAutoTrackEnabled && discoveryAutoTrackId) {
+      discoveryAutoTrackLoading = true;
+      try {
+        const response = await fetch(`/api/auto-track/${encodeURIComponent(discoveryAutoTrackId)}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ enabled: false }),
+        });
+        if (!response.ok) throw new Error(await response.text());
+        discoveryAutoTrackEnabled = false;
+        discoveryAutoTrackId = null;
+        message = "Đã tắt Auto Track cho phim bộ này.";
+      } catch (error) {
+        message = error instanceof Error ? error.message : "Tắt Auto Track thất bại.";
+      } finally {
+        discoveryAutoTrackLoading = false;
+      }
+      return;
+    }
+
+    const folderLink = selectedSourceFolderLink || selectedLinks.find((link) => link.url && /fshare\.vn\/folder\//i.test(link.url));
+    const firstLink = folderLink || selectedLinks.find((link) => link.url);
+    if (!firstLink?.url) {
+      message = "Chưa có link FShare để bật Auto Track.";
+      return;
+    }
+    if (!/fshare\.vn\/folder\//i.test(firstLink.url)) {
+      message = "Auto Track cần link folder FShare của phim bộ.";
+      return;
+    }
+    discoveryAutoTrackLoading = true;
+    try {
+      const folderCode = firstLink.fcode || firstLink.url.split("/folder/")[1]?.split(/[?&/]/)[0] || "";
+      const response = await fetch("/api/auto-track", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          title: selectedFilm?.title || firstLink.name || "FShare series",
+          folder_url: firstLink.url,
+          folder_code: folderCode,
+          media_type: "tv",
+          category: "tv",
+          tmdb_id: selectedFilm?.id,
+          year: selectedFilm?.year ? Number(selectedFilm.year) || undefined : undefined,
+          batch_name: selectedFilm?.title || firstLink.name || "Auto Track series",
+          check_now: false,
+        }),
+      });
+      if (!response.ok) throw new Error(await response.text());
+      const track = await response.json();
+      discoveryAutoTrackId = track?.id || null;
+      discoveryAutoTrackEnabled = true;
+      message = "Đã bật Auto Track cho phim bộ này. Muốn tải ngay vẫn bấm Download và xác nhận như bình thường.";
+    } catch (error) {
+      message = error instanceof Error ? error.message : "Bật Auto Track thất bại.";
+    } finally {
+      discoveryAutoTrackLoading = false;
+    }
   }
 
   function openSelectedDownloadConfirm() {
@@ -1180,6 +1254,9 @@
     selectedImageIndex = 0;
     selectedLinks = [];
     selectedLinkIndex = null;
+    selectedSourceFolderLink = null;
+    discoveryAutoTrackEnabled = false;
+    discoveryAutoTrackId = null;
     addingLinkUrl = null;
     addedLinkUrls = [];
     linkErrors = {};
@@ -1393,7 +1470,15 @@
             {#if showSeriesHelp}
               <p class="series-help"><b>Phim bộ</b> sẽ gom các tập vào cùng thư mục: {selectedFilm?.title || "tự nhận diện"}. <b>Phim lẻ</b> tải từng file riêng.</p>
             {/if}
-            <button type="button" class="bulk-download-btn" disabled={!selectedDownloadUrls.length || !!addingLinkUrl} onclick={openSelectedDownloadConfirm}>{addingLinkUrl ? "Đang tải..." : `Tải ${selectedDownloadUrls.length} tập đã chọn`}</button>
+            <div class="series-download-actions">
+              {#if seriesMode}
+                <button type="button" class="series-autotrack-btn" class:active={discoveryAutoTrackEnabled} disabled={discoveryAutoTrackLoading} onclick={toggleAutoTrackFromDiscovery} title={discoveryAutoTrackEnabled ? "Tắt Auto Track" : "Bật Auto Track"}>
+                  <span class="material-icons">sync</span>
+                  <span>Auto Track</span>
+                </button>
+              {/if}
+              <button type="button" class="bulk-download-btn" disabled={!selectedDownloadUrls.length || !!addingLinkUrl} onclick={openSelectedDownloadConfirm}>{addingLinkUrl ? "Đang tải..." : `Tải ${selectedDownloadUrls.length} tập đã chọn`}</button>
+            </div>
           </div>
           <div class="download-list">
             {#each selectedLinks as link, index}
@@ -1655,6 +1740,11 @@
   .film-actions .primary-action { color: #111827; border-color: transparent; background: linear-gradient(135deg,#f8c14a,#fb7185); }
   .film-actions .trailer-action { border-color: rgba(248,193,74,.28); color: #f8fafc; background: linear-gradient(135deg, rgba(248,193,74,.16), rgba(167,139,250,.16)); }
   .film-actions .trailer-action:disabled { opacity: .45; cursor: not-allowed; }
+  .series-download-actions { display: grid; grid-template-columns: minmax(120px,.42fr) minmax(0,1fr); gap: .55rem; align-items: center; }
+  .series-autotrack-btn { min-height: 42px; display: inline-flex; align-items: center; justify-content: center; gap: .42rem; padding: 0 .85rem; border-radius: 14px; border: 1px solid rgba(148,163,184,.18); color: #94a3b8; background: rgba(255,255,255,.055); font-weight: 950; }
+  .series-autotrack-btn .material-icons { color: #94a3b8; }
+  .series-autotrack-btn.active { color: #080a12; border: 0; background: linear-gradient(135deg,#f8c14a,#a78bfa); box-shadow: 0 14px 34px rgba(167,139,250,.22); }
+  .series-autotrack-btn.active .material-icons { color: #080a12; }
 
   .trailer-backdrop {
     position: fixed;

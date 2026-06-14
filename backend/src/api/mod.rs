@@ -19,3 +19,4 @@ pub mod health;
 pub mod media;
 pub mod folder_source;
 pub mod update;
+pub mod auto_track;
