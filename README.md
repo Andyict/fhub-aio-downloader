@@ -45,6 +45,10 @@ services:
       # Change only /volume1/Video to your NAS folder; keep /downloads unchanged.
       - /volume1/Video:/downloads
 
+      # Allows the in-app Update button to pull/recreate FHub.
+      # No separate updater helper container is required.
+      - /var/run/docker.sock:/var/run/docker.sock
+
     networks:
       - fhub_net
 
@@ -94,13 +98,27 @@ docker compose up -d
 
 ### Web update notice
 
-In **Settings**, FHub checks GitHub for a newer image. When one is available, the web UI shows a compact update notice and copies the Docker update command for you.
+In **Settings**, FHub checks GitHub for a newer image. When one is available, the web UI shows a compact update notice and can update the running container.
 
-FHub intentionally ships as a single-container app. It does not require a separate updater helper container for normal use.
+FHub intentionally ships as a single-container app. It does not require a separate updater helper container for normal use. For web updates, mount Docker socket into `fhub` as shown in `docker-compose.yml`:
+
+```yaml
+- /var/run/docker.sock:/var/run/docker.sock
+```
 
 ### Option 2: Auto-update with Watchtower
 
 Use `docker-compose.auto-update.yml` if you want FHub to check for new images automatically.
+
+## TV Auto Track
+
+For FShare TV-series folders, FHub can save an Auto Track bookmark and watch for new episodes:
+
+- Toggle Auto Track next to the Download button.
+- Enabling Auto Track only saves the folder; it does not immediately download the currently selected files.
+- To download selected files now, still press **Download** and confirm as usual.
+- Configure the scan interval in **Settings → Auto Track**.
+- On later scans, new files are queued automatically while already-seen episodes are skipped.
 
 ## Health check
 

@@ -45,6 +45,10 @@ services:
       # Chỉ đổi /volume1/Video thành thư mục trên NAS của bạn; giữ nguyên /downloads.
       - /volume1/Video:/downloads
 
+      # Cho phép nút Update trong web tự pull/recreate container FHub.
+      # Không cần container updater riêng.
+      - /var/run/docker.sock:/var/run/docker.sock
+
     networks:
       - fhub_net
 
@@ -54,22 +58,6 @@ services:
       - FHUB_DOWNLOADS_DIR=/downloads
       - FHUB_SEGMENTS_PER_DOWNLOAD=16
       - FHUB_MAX_CONCURRENT=4
-      - RUST_LOG=fhub=info,tower_http=info
-      - FHUB_UPDATER_URL=http://fhub-updater:8585
-      - FHUB_CONTAINER_NAME=fhub
-      - FHUB_UPDATE_IMAGE=ghcr.io/andyict/fhub-aio:latest
-
-  fhub-updater:
-    image: ghcr.io/andyict/fhub-aio:latest
-    container_name: fhub-updater
-    restart: unless-stopped
-    command: ["/app/fhub", "updater"]
-    networks:
-      - fhub_net
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    environment:
-      - TZ=Asia/Ho_Chi_Minh
       - RUST_LOG=fhub=info,tower_http=info
       - FHUB_CONTAINER_NAME=fhub
       - FHUB_UPDATE_IMAGE=ghcr.io/andyict/fhub-aio:latest
@@ -110,11 +98,15 @@ docker compose up -d
 
 ### Cập nhật bằng nút trong web
 
-Trong **Settings**, FHub tự kiểm tra GitHub. Nếu có commit/image mới, web sẽ hiện nút **Update now**.
+Trong **Settings**, FHub tự kiểm tra GitHub. Nếu có commit/image mới, web sẽ hiện nút **Update**.
 
-Để nút này tự cập nhật được container, hãy dùng mẫu compose mới có thêm service **fhub-updater**. `fhub` chính không cần mount `/var/run/docker.sock`; chỉ helper updater mới cần socket đó.
+FHub là app một container. Để nút Update trong web tự pull/recreate container, dùng mẫu compose mới có mount Docker socket trực tiếp vào container `fhub`:
 
-Sau khi cập nhật `docker-compose.yml`, chạy:
+```yaml
+- /var/run/docker.sock:/var/run/docker.sock
+```
+
+Không cần service/helper updater riêng. Sau khi cập nhật `docker-compose.yml`, chạy:
 
 ```bash
 docker compose up -d
@@ -123,6 +115,16 @@ docker compose up -d
 ### Cách 2: Tự động cập nhật bằng Watchtower
 
 Dùng `docker-compose.auto-update.yml` nếu bạn muốn FHub tự kiểm tra image mới và cập nhật định kỳ.
+
+## Auto Track phim bộ
+
+Với link folder FShare phim bộ, FHub có thể lưu Auto Track để theo dõi tập mới:
+
+- Bật/tắt Auto Track bằng nút cạnh Download.
+- Bật Auto Track chỉ lưu folder theo dõi, không tự tải ngay các file đang chọn.
+- Muốn tải ngay vẫn bấm **Download** và xác nhận như bình thường.
+- Chu kỳ quét được chỉnh trong **Settings → Auto Track**.
+- Khi folder có tập mới ở lần quét sau, FHub tự thêm tập mới vào queue và tránh tải trùng tập đã ghi nhận.
 
 ## Kiểm tra sức khỏe app
 
