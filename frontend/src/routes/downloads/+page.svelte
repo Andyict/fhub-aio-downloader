@@ -102,7 +102,7 @@
 
   let showLinkHistory = $state(false);
   let linkHistory = $state<LinkHistoryEntry[]>([]);
-  let showDownloadModeHelp = $state(false);
+
   let bannerCache = $state<Record<string, string>>({});
   let detailCache = $state<Record<string, { viTitle?: string; runtime?: number }>>({});
 
@@ -846,11 +846,10 @@
       </div>
     {/if}
     {#if preview && downloadablePreviewItems.length > 1}
-      <div class="download-mode-toggle" class:series={seriesMode} class:help-open={showDownloadModeHelp} aria-label="Chọn kiểu tải">
+      <div class="download-mode-toggle" class:series={seriesMode} aria-label="Chọn kiểu tải">
         <div class="mode-toggle-label">
           <span class="material-icons">{seriesMode ? "video_library" : "movie"}</span>
           <strong>{seriesMode ? "Phim bộ" : "Phim lẻ"}</strong>
-          <button type="button" class="mode-info-button" aria-label="Xem chú thích chế độ tải" aria-expanded={showDownloadModeHelp} onclick={() => (showDownloadModeHelp = !showDownloadModeHelp)}>!</button>
         </div>
         <div class="mode-switch" role="group" aria-label="Chọn phim lẻ hoặc phim bộ">
           <span class="mode-glow" aria-hidden="true"></span>
@@ -861,14 +860,6 @@
             <span class="material-icons">video_library</span><strong>Phim bộ</strong>
           </button>
         </div>
-        {#if showDownloadModeHelp}
-          <div class="mode-help-box">
-            <strong>Chú thích chế độ tải</strong>
-            <p><b>Phim lẻ</b>: tải từng file như một phim/file riêng.</p>
-            <p><b>Phim bộ</b>: gom các tập vào cùng một thư mục theo tên phim/folder, phù hợp tải series nhiều tập.</p>
-            <p><b>Thư mục hiện tại</b>: {preview.folder_name || "tự nhận diện"}</p>
-          </div>
-        {/if}
       </div>
     {/if}
   </div>

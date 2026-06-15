@@ -13,11 +13,126 @@
   let activityOpen = $state(true);
   let loading = $state(false);
   let status = $state("Đang tải Auto Track...");
+  let language = $state<"vi" | "en">("vi");
 
   onMount(() => {
+    loadLanguage();
     selectedActivityDay = dayKey(new Date());
+    const handleLanguage = (event: Event) => {
+      const next = (event as CustomEvent).detail;
+      if (next === "vi" || next === "en") language = next;
+    };
+    window.addEventListener("fhub-language-change", handleLanguage);
     void loadTracks();
+    return () => window.removeEventListener("fhub-language-change", handleLanguage);
   });
+
+  const text = $derived(language === "vi" ? {
+    loading: "Đang tải Auto Track...",
+    empty: "Chưa có bộ nào được Auto Track.",
+    loadFailed: "Không tải được Auto Track",
+    noEnabled: "Không có Auto Track đang bật để kiểm tra.",
+    checkingMany: (count: number) => `Đang kiểm tra ${count} bộ...`,
+    checkedSome: (ok: number, total: number, failed: number) => `Đã kiểm tra ${ok}/${total} bộ, ${failed} bộ lỗi.`,
+    checkedAll: (ok: number) => `Đã kiểm tra tất cả ${ok} bộ.`,
+    scanning: (title: string) => `Đang quét ${title}...`,
+    scanned: "Đã quét xong.",
+    heroTitle: "Theo dõi phim bộ",
+    autoEvery: (value: string) => `Tự track mỗi ${value}`,
+    checkAll: "Kiểm tra tất cả",
+    historyTitle: "Lịch sử Auto Track tải về 7 ngày",
+    hide: "Ẩn",
+    show: "Hiện",
+    dayItems: (count: number) => `${count} mục`,
+    noDayActivity: "Ngày này chưa có tập nào được Auto Track tải về.",
+    checkNow: "Check ngay",
+    deleteTrack: "Xoá Auto Track",
+    filesInTrack: (count: number) => `${count} file trong Auto Track`,
+    loadingDetail: "Đang tải chi tiết...",
+    noTracks: "Vào trang Tải xuống, check link thư mục phim bộ rồi bấm Auto Track.",
+    deleteTitle: "Xoá Auto Track",
+    deleteBody: "FHUB sẽ ngừng theo dõi folder này. File đã tải và queue hiện có vẫn được giữ nguyên.",
+    cancel: "Huỷ",
+    delete: "Xoá",
+    downloaded: "Đã tải xong",
+    downloading: "Đang tải",
+    queued: "Đang chờ",
+    paused: "Tạm dừng",
+    skipped: "Đã bỏ qua",
+    failed: "Lỗi tải xuống",
+    notDownloaded: "Chưa tải",
+    completedAt: (value: string) => `Tải xong: ${value}`,
+    queuedAt: (value: string) => `Thêm hàng chờ: ${value}`,
+    seenAt: (value: string) => `Ghi nhận: ${value}`,
+    noTime: "Chưa có thời gian",
+    downloadEpisode: (name: string) => `Tải ${name}`,
+    addEpisode: (name: string, title: string) => `Đang thêm ${name} của ${title} vào Downloads...`,
+    addedEpisode: (title: string, name: string) => `Đã thêm ${title} · ${name} vào Downloads.`,
+    addFailed: (name: string) => `Không thêm được ${name}.`,
+    nextWorker: "Lần tới: khi worker chạy",
+    lastNone: "Track gần nhất: chưa check nền",
+    lastAt: (value: string) => `Track gần nhất: ${value}`,
+    nextAt: (value: string) => `Lần tới: ${value}`,
+    mins: (value: number) => `${value} phút`,
+    hours: (value: string | number) => `${value} giờ`,
+  } : {
+    loading: "Loading Auto Track...",
+    empty: "No Auto Track series yet.",
+    loadFailed: "Could not load Auto Track",
+    noEnabled: "No enabled Auto Track series to check.",
+    checkingMany: (count: number) => `Checking ${count} series...`,
+    checkedSome: (ok: number, total: number, failed: number) => `Checked ${ok}/${total} series, ${failed} failed.`,
+    checkedAll: (ok: number) => `Checked all ${ok} series.`,
+    scanning: (title: string) => `Scanning ${title}...`,
+    scanned: "Scan complete.",
+    heroTitle: "Auto Track series",
+    autoEvery: (value: string) => `Auto track every ${value}`,
+    checkAll: "Check all",
+    historyTitle: "Auto Track download history — 7 days",
+    hide: "Hide",
+    show: "Show",
+    dayItems: (count: number) => `${count} item${count === 1 ? "" : "s"}`,
+    noDayActivity: "No episodes were downloaded by Auto Track on this day.",
+    checkNow: "Check now",
+    deleteTrack: "Delete Auto Track",
+    filesInTrack: (count: number) => `${count} files in Auto Track`,
+    loadingDetail: "Loading details...",
+    noTracks: "Go to Downloads, check a series folder link, then enable Auto Track.",
+    deleteTitle: "Delete Auto Track",
+    deleteBody: "FHUB will stop watching this folder. Downloaded files and existing queue items will be kept.",
+    cancel: "Cancel",
+    delete: "Delete",
+    downloaded: "Downloaded",
+    downloading: "Downloading",
+    queued: "Queued",
+    paused: "Paused",
+    skipped: "Skipped",
+    failed: "Download failed",
+    notDownloaded: "Not downloaded",
+    completedAt: (value: string) => `Downloaded: ${value}`,
+    queuedAt: (value: string) => `Queued: ${value}`,
+    seenAt: (value: string) => `Seen: ${value}`,
+    noTime: "No time yet",
+    downloadEpisode: (name: string) => `Download ${name}`,
+    addEpisode: (name: string, title: string) => `Adding ${name} from ${title} to Downloads...`,
+    addedEpisode: (title: string, name: string) => `Added ${title} · ${name} to Downloads.`,
+    addFailed: (name: string) => `Could not add ${name}.`,
+    nextWorker: "Next: when the worker runs",
+    lastNone: "Last check: not checked in background yet",
+    lastAt: (value: string) => `Last check: ${value}`,
+    nextAt: (value: string) => `Next: ${value}`,
+    mins: (value: number) => `${value} min`,
+    hours: (value: string | number) => `${value} hr`,
+  });
+
+  function loadLanguage() {
+    try {
+      const saved = localStorage.getItem("fhub-ui-language");
+      if (saved === "vi" || saved === "en") language = saved;
+    } catch {
+      // localStorage may be unavailable.
+    }
+  }
 
   async function loadTracks() {
     loading = true;
@@ -25,9 +140,9 @@
       const res = await fetch("/api/auto-track", { credentials: "include" });
       if (!res.ok) throw new Error(await res.text());
       tracks = await res.json();
-      status = tracks.length ? "" : "Chưa có bộ nào được Auto Track.";
+      status = tracks.length ? "" : text.empty;
       await loadRecentDetails(tracks);
-    } catch (err) { status = `Không tải được Auto Track: ${messageOf(err)}`; }
+    } catch (err) { status = `${text.loadFailed}: ${messageOf(err)}`; }
     finally { loading = false; }
   }
 
@@ -65,11 +180,11 @@
   async function checkAllTracks() {
     const activeTracks = tracks.filter((track) => track.enabled);
     if (!activeTracks.length) {
-      status = "Không có Auto Track đang bật để kiểm tra.";
+      status = text.noEnabled;
       return;
     }
     loading = true;
-    status = `Đang kiểm tra ${activeTracks.length} bộ...`;
+    status = text.checkingMany(activeTracks.length);
     let ok = 0;
     let failed = 0;
     for (const track of activeTracks) {
@@ -83,15 +198,15 @@
       }
     }
     loading = false;
-    status = failed ? `Đã kiểm tra ${ok}/${activeTracks.length} bộ, ${failed} bộ lỗi.` : `Đã kiểm tra tất cả ${ok} bộ.`;
+    status = failed ? text.checkedSome(ok, activeTracks.length, failed) : text.checkedAll(ok);
     await loadTracks();
   }
 
   async function checkNow(track: Track) {
-    status = `Đang quét ${track.title}...`;
+    status = text.scanning(track.title);
     const res = await fetch(`/api/auto-track/${encodeURIComponent(track.id)}/check`, { method: "POST", credentials: "include" });
     const data = res.ok ? await res.json() : { message: await res.text() };
-    status = data.message || "Đã quét xong.";
+    status = data.message || text.scanned;
     await loadTracks();
     await loadTrackDetail(track);
     expandedId = track.id;
@@ -115,7 +230,7 @@
   }
 
   function messageOf(err: unknown) { return err instanceof Error ? err.message : String(err); }
-  function dateLabel(v?: string) { return v ? new Date(v).toLocaleString("vi-VN", { hour12: false }) : "Chưa có thời gian"; }
+  function dateLabel(v?: string) { return v ? new Date(v).toLocaleString(language === "vi" ? "vi-VN" : "en-US", { hour12: false }) : text.noTime; }
   function compactTrackTime(v?: string) {
     if (!v) return "Chưa track";
     const date = new Date(v);
@@ -123,22 +238,22 @@
     const sameDay = date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth() && date.getDate() === now.getDate();
     const time = date.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", hour12: false });
     if (sameDay) return time;
-    return `${time} · ${date.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" })}`;
+    return `${time} · ${date.toLocaleDateString(language === "vi" ? "vi-VN" : "en-US", { day: "2-digit", month: "2-digit" })}`;
   }
   function lastCheckLabel(track: Track) {
-    return track.last_checked_at ? `Track gần nhất: ${compactTrackTime(track.last_checked_at)}` : "Track gần nhất: chưa check nền";
+    return track.last_checked_at ? text.lastAt(compactTrackTime(track.last_checked_at)) : text.lastNone;
   }
   function intervalLabel(seconds?: number) {
     const secs = Number(seconds || 3600);
-    if (secs < 3600) return `${Math.round(secs / 60)} phút`;
+    if (secs < 3600) return text.mins(Math.round(secs / 60));
     const hours = secs / 3600;
-    return `${Number.isInteger(hours) ? hours : hours.toFixed(1)} giờ`;
+    return text.hours(Number.isInteger(hours) ? hours : hours.toFixed(1));
   }
   function nextTrackLabel(track: Track) {
     const base = track.last_checked_at;
-    if (!base) return "Lần tới: khi worker chạy";
+    if (!base) return text.nextWorker;
     const next = new Date(new Date(base).getTime() + Number(track.check_interval_secs || 3600) * 1000);
-    return `Lần tới: ${compactTrackTime(next.toISOString())}`;
+    return text.nextAt(compactTrackTime(next.toISOString()));
   }
   function dayKey(date: Date) {
     const y = date.getFullYear();
@@ -173,7 +288,7 @@
       if (!item.auto_queued || !hasDownloadTask || !downloadableStatuses.has(status)) return [];
       const at = item.completed_at || item.queued_at || item.first_seen_at || "";
       if (!at) return [];
-      return [{ track: detail, item, at, kind: "download" as const, status: item.completed_at ? "Đã tải xong" : itemStatusLabel(item) }];
+      return [{ track: detail, item, at, kind: "download" as const, status: item.completed_at ? text.downloaded : itemStatusLabel(item) }];
     }));
     const min = new Date();
     min.setDate(min.getDate() - 6);
@@ -249,30 +364,30 @@
 
   function episodeName(item: TrackItem) {
     if (item.season && item.episode) return `S${String(item.season).padStart(2, "0")}E${String(item.episode).padStart(2, "0")}`;
-    if (item.episode) return `Tập ${item.episode}`;
+    if (item.episode) return language === "vi" ? `Tập ${item.episode}` : `Episode ${item.episode}`;
     const sxex = item.file_name.match(/S\d{1,2}\s*E\d{1,3}/i)?.[0]?.replace(/\s+/g, "").toUpperCase();
     if (sxex) return sxex;
     const ep = item.file_name.match(/(?:tập|tap|episode|ep)[\s._:-]*(\d{1,3})/i)?.[1];
-    return ep ? `Tập ${ep}` : item.file_name;
+    return ep ? (language === "vi" ? `Tập ${ep}` : `Episode ${ep}`) : item.file_name;
   }
-  function timeLabel(v?: string) { return v ? new Date(v).toLocaleString("vi-VN", { hour12: false }) : "Chưa có thời gian"; }
+  function timeLabel(v?: string) { return v ? new Date(v).toLocaleString(language === "vi" ? "vi-VN" : "en-US", { hour12: false }) : text.noTime; }
   function size(v?: number) { const n = v || 0; if (n > 1073741824) return `${(n/1073741824).toFixed(2)} GB`; if (n > 1048576) return `${(n/1048576).toFixed(1)} MB`; return `${n} B`; }
 
   function itemStatusLabel(item: TrackItem) {
     const s = String(item.status || "").toLowerCase();
-    if (s === "completed") return "Đã tải xong";
-    if (s === "downloading") return "Đang tải";
-    if (s === "queued") return "Đang chờ";
-    if (s === "paused") return "Tạm dừng";
-    if (s === "skipped") return "Đã bỏ qua";
-    if (s === "failed") return "Lỗi";
-    return "Chưa tải";
+    if (s === "completed") return text.downloaded;
+    if (s === "downloading") return text.downloading;
+    if (s === "queued") return text.queued;
+    if (s === "paused") return text.paused;
+    if (s === "skipped") return text.skipped;
+    if (s === "failed") return text.failed;
+    return text.notDownloaded;
   }
 
   function itemTimeLabel(item: TrackItem) {
-    if (item.completed_at) return `Tải xong: ${timeLabel(item.completed_at)}`;
-    if (item.queued_at) return `Thêm hàng chờ: ${timeLabel(item.queued_at)}`;
-    if (item.first_seen_at) return `Ghi nhận/cập nhật: ${timeLabel(item.first_seen_at)}`;
+    if (item.completed_at) return text.completedAt(timeLabel(item.completed_at));
+    if (item.queued_at) return text.queuedAt(timeLabel(item.queued_at));
+    if (item.first_seen_at) return text.seenAt(timeLabel(item.first_seen_at));
     return "";
   }
 
@@ -285,7 +400,7 @@
     event?.preventDefault();
     event?.stopPropagation();
     const url = item.file_url || `https://www.fshare.vn/file/${item.fshare_code}`;
-    status = `Đang thêm ${episodeName(item)} của ${track.title} vào Downloads...`;
+    status = text.addEpisode(episodeName(item), track.title);
     try {
       const res = await fetch("/api/downloads", {
         method: "POST",
@@ -301,10 +416,10 @@
         }),
       });
       if (!res.ok) throw new Error(await res.text());
-      status = `Đã thêm ${track.title} · ${episodeName(item)} vào Downloads.`;
+      status = text.addedEpisode(track.title, episodeName(item));
       await loadTrackDetail(track);
     } catch (err) {
-      status = `Không thêm được ${episodeName(item)}: ${messageOf(err)}`;
+      status = `${text.addFailed(episodeName(item))} ${messageOf(err)}`;
     }
   }
 </script>
@@ -312,13 +427,13 @@
 <section class="track-screen">
   <div class="track-hero">
     <div>
-      <h1>Theo dõi phim bộ</h1>
+      <h1>{text.heroTitle}</h1>
       <div class="hero-meta">
-        <span>Tự track mỗi {intervalLabel(tracks.find((track) => track.enabled)?.check_interval_secs || tracks[0]?.check_interval_secs)}</span>
+        <span>{text.autoEvery(intervalLabel(tracks.find((track) => track.enabled)?.check_interval_secs || tracks[0]?.check_interval_secs))}</span>
         {#if tracks.find((track) => track.enabled)}<span>{nextTrackLabel(tracks.find((track) => track.enabled) || tracks[0])}</span>{/if}
       </div>
     </div>
-    <button onclick={checkAllTracks} disabled={loading || !tracks.some((track) => track.enabled)}><span class="material-icons">sync</span>Kiểm tra tất cả</button>
+    <button onclick={checkAllTracks} disabled={loading || !tracks.some((track) => track.enabled)}><span class="material-icons">sync</span>{text.checkAll}</button>
   </div>
 
   {#if status}
@@ -327,8 +442,8 @@
 
   <section class="recent-panel">
     <div class="recent-head">
-      <div><span class="material-icons">event_note</span><strong>Lịch sử Auto Track tải về 7 ngày</strong></div>
-      <button type="button" class="activity-toggle" onclick={() => activityOpen = !activityOpen}>{activityOpen ? "Ẩn" : "Hiện"}</button>
+      <div><span class="material-icons">event_note</span><strong>{text.historyTitle}</strong></div>
+      <button type="button" class="activity-toggle" onclick={() => activityOpen = !activityOpen}>{activityOpen ? text.hide : text.show}</button>
     </div>
     <div class="day-tabs" role="tablist" aria-label="Chọn ngày lịch sử Auto Track">
       {#each lastSevenDays() as day}
@@ -340,7 +455,7 @@
           aria-selected={selectedActivityDay === day.key}
         >
           <strong>{day.label}</strong>
-          <small>{activityCount(day.key)} mục</small>
+          <small>{text.dayItems(activityCount(day.key))}</small>
         </button>
       {/each}
     </div>
@@ -355,7 +470,7 @@
           </div>
         </div>
       {:else}
-        <div class="recent-empty">Ngày này chưa có tập nào được Auto Track tải về.</div>
+        <div class="recent-empty">{text.noDayActivity}</div>
       {/each}
     </div>
     {/if}
@@ -376,23 +491,23 @@
           </div>
           <div>
             <h2>{track.title}{#if hasNewAutoTrackEpisode(track)} <span class="new-badge">NEW</span>{/if}</h2>
-            {#if track.last_error}<small class="err">{track.last_error}</small>{/if}
+
           </div>
           <span class="expand-icon material-icons">{expanded ? "expand_less" : "expand_more"}</span>
         </div>
 
         <div class="actions compact-actions" onclick={(event) => event.stopPropagation()} onkeydown={(event) => event.stopPropagation()} role="group" aria-label="Auto Track actions">
-          <button class="check-btn" onclick={() => checkNow(track)} title="Check ngay" aria-label="Check ngay"><span class="material-icons">sync</span></button>
+          <button class="check-btn" onclick={() => checkNow(track)} title={text.checkNow} aria-label={text.checkNow}><span class="material-icons">sync</span></button>
           <button class:track-on={track.enabled} class:track-off={!track.enabled} onclick={() => toggleTrack(track)}>
             <span class="material-icons">{track.enabled ? "toggle_on" : "toggle_off"}</span>AutoTrack: {track.enabled ? "ON" : "OFF"}
           </button>
-          <button class="delete-icon" onclick={() => pendingDeleteTrack = track} title="Xoá Auto Track" aria-label="Xoá Auto Track"><span class="material-icons">delete</span></button>
+          <button class="delete-icon" onclick={() => pendingDeleteTrack = track} title={text.deleteTrack} aria-label={text.deleteTrack}><span class="material-icons">delete</span></button>
         </div>
 
         {#if expanded}
           <div class="detail-inline">
             {#if detail}
-              <div class="detail-head"><strong>{detail.items.length} file trong Auto Track</strong><small>Ấn lại vào phim để thu gọn</small></div>
+              <div class="detail-head"><strong>{text.filesInTrack(detail.items.length)}</strong></div>
               <div class="items">
                 {#each sortedTrackItems(detail.items) as item}
                   <div class="item">
@@ -401,7 +516,7 @@
                       <strong>{item.file_name}</strong>
                       <small>{item.fshare_code} · {size(item.file_size)}</small>
                       <small>{itemTimeLabel(item)}</small>
-                      {#if item.error_message}<small class="err">{item.error_message}</small>{/if}
+                      {#if String(item.status || '').toLowerCase() === "failed"}<small class="err">{text.failed}</small>{/if}
                     </div>
                     <div class="item-right">
                       <b class={String(item.status || '').toLowerCase()}>{itemStatusLabel(item)}</b>
@@ -409,8 +524,8 @@
                         <button
                           type="button"
                           class="item-download"
-                          title={`Tải ${episodeName(item)}`}
-                          aria-label={`Tải ${episodeName(item)}`}
+                          title={text.downloadEpisode(episodeName(item))}
+                          aria-label={text.downloadEpisode(episodeName(item))}
                           onclick={(event) => downloadTrackItem(track, item, event)}
                         >
                           <span class="material-icons">arrow_downward</span>
@@ -421,13 +536,13 @@
                 {/each}
               </div>
             {:else}
-              <div class="loading-detail">Đang tải chi tiết...</div>
+              <div class="loading-detail">{text.loadingDetail}</div>
             {/if}
           </div>
         {/if}
       </article>
     {:else}
-      <div class="empty">Vào trang Tải xuống, check link thư mục phim bộ rồi bấm Auto Track.</div>
+      <div class="empty">{text.noTracks}</div>
     {/each}
   </section>
 
@@ -436,13 +551,13 @@
       <section class="confirm-card" role="dialog" aria-modal="true" aria-labelledby="delete-track-title">
         <div class="confirm-icon"><span class="material-icons">bookmark_remove</span></div>
         <div>
-          <span class="eyebrow">Xoá Auto Track</span>
+          <span class="eyebrow">{text.deleteTitle}</span>
           <h2 id="delete-track-title">{pendingDeleteTrack.title}</h2>
-          <p>FHUB sẽ ngừng theo dõi folder này. File đã tải và queue hiện có vẫn được giữ nguyên.</p>
+          <p>{text.deleteBody}</p>
         </div>
         <div class="confirm-actions">
-          <button type="button" onclick={() => pendingDeleteTrack = null}>Huỷ</button>
-          <button type="button" class="confirm-danger" onclick={() => pendingDeleteTrack && deleteTrack(pendingDeleteTrack)}><span class="material-icons">delete</span>Xoá</button>
+          <button type="button" onclick={() => pendingDeleteTrack = null}>{text.cancel}</button>
+          <button type="button" class="confirm-danger" onclick={() => pendingDeleteTrack && deleteTrack(pendingDeleteTrack)}><span class="material-icons">delete</span>{text.delete}</button>
         </div>
       </section>
     </div>
