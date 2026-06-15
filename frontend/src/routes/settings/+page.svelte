@@ -626,6 +626,10 @@
         <small>{updatingApp ? updateMessage : `Hiện tại ${updateCurrentLabel} · Mới nhất ${updateStatus?.latest_commit}`}</small>
       </div>
       <div class="update-actions">
+        <button type="button" class="update-now" disabled={updatingApp} onclick={runWebUpdate} aria-label="Update FHub">
+          <span class="material-icons">upgrade</span>
+          {updatingApp ? "Đang update..." : "Update FHub"}
+        </button>
         {#if updatingApp}<small>Trang tự làm mới sau 1 phút</small>{:else if checkingUpdate}<small>Đang kiểm tra...</small>{/if}
       </div>
     </section>
@@ -639,15 +643,6 @@
       </button>
     {/each}
   </nav>
-
-  {#if activeTab === "overview" && shouldShowUpdateBanner}
-    <div class="settings-mobile-actions">
-      <button type="button" class="settings-mobile-update mobile-update-link" disabled={updatingApp} onclick={runWebUpdate} aria-label="Update FHub">
-        <span class="material-icons">upgrade</span>
-        <strong>{updatingApp ? "Đang update..." : "Update FHub"}</strong>
-      </button>
-    </div>
-  {/if}
 
   <section class="settings-grid overview-grid">
     {#if activeTab === "overview"}
@@ -1178,7 +1173,8 @@
     .status-line { display: none; }
     .download-meter, .user-row, .storage-map, .update-banner { grid-template-columns: 1fr; }
     .compact-update { justify-content: stretch; }
-    .update-actions { grid-template-columns: 1fr 1fr; min-width: 0; }
+    .update-actions { grid-template-columns: 1fr; min-width: 0; justify-items: stretch; }
+    .update-actions .update-now { width: 100%; min-height: 52px; }
     .compact-update .update-actions { grid-template-columns: 1fr; }
     .download-preset-grid { grid-template-columns: 1fr; }
     .download-preset-grid button { min-height: 64px; }
