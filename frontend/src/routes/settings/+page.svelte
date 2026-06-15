@@ -327,6 +327,12 @@
     updateClickLock = false;
   }
 
+  async function submitUpdateForm(event: SubmitEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    await runWebUpdate(event);
+  }
+
   async function confirmWebUpdate() {
     showUpdateConfirm = false;
     updatingApp = true;
@@ -574,7 +580,7 @@
         <span class="material-icons">refresh</span>
         {uiLanguage === "vi" ? "Làm mới" : "Refresh"}
       </button>
-      <button type="button" class="primary-button header-update-button" onpointerup={runWebUpdate} onclick={runWebUpdate} disabled={updatingApp} aria-label="Update FHub">
+      <button type="button" class="primary-button header-update-button" disabled={updatingApp} onclick={runWebUpdate} aria-label="Update FHub">
         <span class="material-icons">upgrade</span>
         {updatingApp ? "Đang update..." : "Update"}
       </button>
@@ -602,7 +608,7 @@
         <small>{`Hiện tại ${updateCurrentLabel} · Mới nhất ${updateStatus?.latest_commit}`}</small>
       </div>
       <div class="update-actions">
-        <button type="button" class="primary-button update-now" onpointerup={runWebUpdate} onclick={runWebUpdate} disabled={updatingApp}>
+        <button type="button" class="primary-button update-now" disabled={updatingApp} onclick={runWebUpdate}>
           <span class="material-icons">upgrade</span>
           {updatingApp ? "Đang update..." : "Update"}
         </button>
@@ -634,7 +640,7 @@
 
   {#if activeTab === "overview"}
     <div class="settings-mobile-actions">
-      <button type="button" class="settings-mobile-update" onpointerup={runWebUpdate} onclick={runWebUpdate} disabled={updatingApp} aria-label="Update FHub">
+      <button type="button" class="settings-mobile-update mobile-update-link" disabled={updatingApp} onclick={runWebUpdate} aria-label="Update FHub">
         <span class="material-icons">upgrade</span>
         <strong>{updatingApp ? "Đang update..." : "Update FHub"}</strong>
       </button>
@@ -938,6 +944,8 @@
   h2 { color: #fff; font-size: clamp(1.25rem,2.1vw,1.6rem); line-height: 1.1; letter-spacing: -.04em; }
   .hero-copy p { max-width: 700px; margin-top: 1rem; color: rgba(226,232,240,.7); font-size: 1.06rem; line-height: 1.55; }
   .hero-actions { display: flex; flex-wrap: wrap; gap: .65rem; justify-content: flex-end; align-items: center; pointer-events: auto; }
+  .update-native-form { margin: 0; display: inline-flex; min-width: 0; }
+  .update-submit-frame { position: fixed; width: 1px; height: 1px; opacity: 0; pointer-events: none; border: 0; }
   .header-update-button { width: auto; min-width: 118px; pointer-events: auto; display: inline-flex; align-items: center; justify-content: center; gap: .45rem; }
   .ghost-button, .primary-button, .danger-button, .user-row button { min-height: 48px; border-radius: 14px; padding: 0 1rem; border: 1px solid rgba(148,163,184,.16); color: #f8fafc; background: rgba(255,255,255,.06); font-weight: 900; }
   .ghost-button { display: inline-flex; align-items: center; gap: .45rem; background: rgba(255,255,255,.08); }
@@ -1200,7 +1208,7 @@
   .tool-buttons button { min-height: 38px; border-radius: 12px; padding: 0 .45rem; font-size: .82rem; }
   .mini-history { display: grid; gap: .12rem; padding: .5rem .55rem; border-radius: 12px; color: rgba(226,232,240,.64); background: rgba(3,6,14,.35); font-size: .75rem; }
   .mini-history strong { color: #fff; font-size: .8rem; }
-  @media(max-width:720px){ .settings-grid{grid-template-columns:1fr;gap:1rem}.settings-hero{display:none}.overview-strip{display:none}.status-line{display:none}.download-overview-panel{margin-top:.45rem}.settings-mobile-actions{position:sticky;bottom:.75rem;z-index:9999;display:grid;grid-template-columns:1.35fr .9fr;gap:.6rem;margin:.55rem 0 1.15rem;padding:.48rem;border-radius:22px;border:1px solid rgba(148,163,184,.18);background:rgba(8,12,22,.88);box-shadow:0 18px 50px rgba(0,0,0,.42);backdrop-filter:blur(18px) saturate(150%)}.settings-mobile-update{min-height:56px;display:flex;align-items:center;justify-content:center;gap:.55rem;padding:0 1rem;border-radius:17px;border:0;color:#080a12;background:linear-gradient(135deg,#f8c14a,#a78bfa);font-weight:950;touch-action:manipulation;pointer-events:auto}.settings-mobile-update .material-icons{color:#080a12}.settings-mobile-signout{min-height:56px;display:flex;align-items:center;justify-content:center;gap:.55rem;margin:0;padding:0 1rem;border-radius:17px;border:1px solid rgba(248,113,113,.22);color:#fecaca;text-decoration:none;background:rgba(127,29,29,.16);font-weight:950}.settings-mobile-signout .material-icons{color:#fecaca}.users-panel{padding:.75rem!important}.users-title{margin-bottom:.55rem}.user-line{min-height:52px;grid-template-columns:34px minmax(0,1fr) 22px;padding:.46rem .52rem}.avatar.mini{width:34px;height:34px;border-radius:11px}.user-copy strong{font-size:.94rem}.user-copy small{font-size:.74rem}.user-tools{padding:0 .52rem .52rem;gap:.42rem}.tool-buttons button{min-height:36px}.inline-field input,.inline-field select{min-height:38px}.mini-history{font-size:.72rem}}
+  @media(max-width:720px){ .settings-grid{grid-template-columns:1fr;gap:1rem}.settings-hero{display:none}.overview-strip{display:none}.status-line{display:none}.download-overview-panel{margin-top:.45rem}.settings-mobile-actions{position:sticky;bottom:.75rem;z-index:9999;display:grid;grid-template-columns:1.35fr .9fr;gap:.6rem;margin:.55rem 0 1.15rem;padding:.48rem;border-radius:22px;border:1px solid rgba(148,163,184,.18);background:rgba(8,12,22,.88);box-shadow:0 18px 50px rgba(0,0,0,.42);backdrop-filter:blur(18px) saturate(150%)}.mobile-update-form,.mobile-update-link{display:flex;width:100%}.settings-mobile-update{width:100%;min-height:56px;display:flex;align-items:center;justify-content:center;gap:.55rem;padding:0 1rem;border-radius:17px;border:0;color:#080a12;text-decoration:none;background:linear-gradient(135deg,#f8c14a,#a78bfa);font-weight:950;touch-action:manipulation;pointer-events:auto}.settings-mobile-update .material-icons{color:#080a12}.settings-mobile-signout{min-height:56px;display:flex;align-items:center;justify-content:center;gap:.55rem;margin:0;padding:0 1rem;border-radius:17px;border:1px solid rgba(248,113,113,.22);color:#fecaca;text-decoration:none;background:rgba(127,29,29,.16);font-weight:950}.settings-mobile-signout .material-icons{color:#fecaca}.users-panel{padding:.75rem!important}.users-title{margin-bottom:.55rem}.user-line{min-height:52px;grid-template-columns:34px minmax(0,1fr) 22px;padding:.46rem .52rem}.avatar.mini{width:34px;height:34px;border-radius:11px}.user-copy strong{font-size:.94rem}.user-copy small{font-size:.74rem}.user-tools{padding:0 .52rem .52rem;gap:.42rem}.tool-buttons button{min-height:36px}.inline-field input,.inline-field select{min-height:38px}.mini-history{font-size:.72rem}}
 
 
   .update-modal-backdrop { position: fixed; inset: 0; z-index: 99999; display: grid; place-items: center; padding: clamp(.9rem, 3vw, 2rem); background: radial-gradient(circle at 50% 0%, rgba(167,139,250,.18), transparent 34%), rgba(2,5,13,.76); backdrop-filter: blur(22px) saturate(150%); }

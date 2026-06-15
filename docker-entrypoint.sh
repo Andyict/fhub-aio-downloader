@@ -13,8 +13,16 @@ APP_GID="911"
 APPDATA_DIR="${FHUB_APPDATA_DIR:-/appData}"
 DOWNLOADS_DIR="${FHUB_DOWNLOADS_DIR:-${APPDATA_DIR}/downloads}"
 
+# Make Docker socket usable by the app user when the host mounted it.
+# Synology/Docker hosts commonly expose it as root:root 660, which makes the
+# web updater look enabled in compose but unusable after we drop privileges.
+if [ -S /var/run/docker.sock ]; then
+    chgrp "$APP_GID" /var/run/docker.sock 2>/dev/null || true
+    chmod g+rw /var/run/docker.sock 2>/dev/null || true
+fi
+
 # Updater helper needs Docker socket access; keep it as root and skip appData checks.
-if [ "${1:-}" = "updater" ] || { [ "${1:-}" = "/app/fhub" ] && [ "${2:-}" = "updater" ]; }; then
+if [ "${1:-}" = "updater" ] || [ "${1:-}" = "updater-run-once" ] || { [ "${1:-}" = "/app/fhub" ] && { [ "${2:-}" = "updater" ] || [ "${2:-}" = "updater-run-once" ]; }; }; then
     exec "$@"
 fi
 
