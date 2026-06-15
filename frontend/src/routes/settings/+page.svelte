@@ -633,10 +633,16 @@
   </section>
 
   {#if activeTab === "overview"}
-    <a class="settings-mobile-signout" href="/login" aria-label={t.signOut}>
-      <span class="material-icons">logout</span>
-      <strong>{t.signOut}</strong>
-    </a>
+    <div class="settings-mobile-actions">
+      <button type="button" class="settings-mobile-update" onpointerup={runWebUpdate} onclick={runWebUpdate} disabled={updatingApp} aria-label="Update FHub">
+        <span class="material-icons">upgrade</span>
+        <strong>{updatingApp ? "Đang update..." : "Update FHub"}</strong>
+      </button>
+      <a class="settings-mobile-signout" href="/login" aria-label={t.signOut}>
+        <span class="material-icons">logout</span>
+        <strong>{t.signOut}</strong>
+      </a>
+    </div>
   {/if}
 </div>
 
@@ -996,7 +1002,7 @@
   .settings-tabs button.active .material-icons { color: #080a12; background: rgba(8,10,18,.12); }
   .settings-tabs strong { min-width: 0; font-size: .9rem; line-height: 1; text-align: center; overflow: hidden; text-overflow: ellipsis; }
   .settings-tabs small { display: none; }
-  .settings-mobile-signout { display: none; }
+  .settings-mobile-actions, .settings-mobile-update, .settings-mobile-signout { display: none; }
   .download-meter { display: grid; grid-template-columns: 132px minmax(0,1fr); align-items: center; gap: 1rem; min-height: 116px; margin-bottom: 1rem; padding: 1rem; border: 1px solid rgba(148,163,184,.14); border-radius: 18px; background: radial-gradient(circle at 0% 50%, rgba(56,189,248,.14), transparent 36%), rgba(255,255,255,.045); }
   .download-meter strong { display: block; color: #fff; font-size: 3rem; line-height: .92; letter-spacing: -.06em; }
   .download-meter span { color: rgba(226,232,240,.62); font-weight: 800; }
@@ -1194,7 +1200,7 @@
   .tool-buttons button { min-height: 38px; border-radius: 12px; padding: 0 .45rem; font-size: .82rem; }
   .mini-history { display: grid; gap: .12rem; padding: .5rem .55rem; border-radius: 12px; color: rgba(226,232,240,.64); background: rgba(3,6,14,.35); font-size: .75rem; }
   .mini-history strong { color: #fff; font-size: .8rem; }
-  @media(max-width:720px){ .settings-grid{grid-template-columns:1fr;gap:1rem}.settings-hero{display:none}.overview-strip{display:none}.status-line{display:none}.download-overview-panel{margin-top:.45rem}.settings-mobile-signout{min-height:52px;display:flex;align-items:center;justify-content:center;gap:.55rem;margin:.4rem 0 1.15rem;padding:0 1rem;border-radius:18px;border:1px solid rgba(248,113,113,.22);color:#fecaca;text-decoration:none;background:rgba(127,29,29,.16);font-weight:950}.settings-mobile-signout .material-icons{color:#fecaca}.users-panel{padding:.75rem!important}.users-title{margin-bottom:.55rem}.user-line{min-height:52px;grid-template-columns:34px minmax(0,1fr) 22px;padding:.46rem .52rem}.avatar.mini{width:34px;height:34px;border-radius:11px}.user-copy strong{font-size:.94rem}.user-copy small{font-size:.74rem}.user-tools{padding:0 .52rem .52rem;gap:.42rem}.tool-buttons button{min-height:36px}.inline-field input,.inline-field select{min-height:38px}.mini-history{font-size:.72rem}}
+  @media(max-width:720px){ .settings-grid{grid-template-columns:1fr;gap:1rem}.settings-hero{display:none}.overview-strip{display:none}.status-line{display:none}.download-overview-panel{margin-top:.45rem}.settings-mobile-actions{position:sticky;bottom:.75rem;z-index:9999;display:grid;grid-template-columns:1.35fr .9fr;gap:.6rem;margin:.55rem 0 1.15rem;padding:.48rem;border-radius:22px;border:1px solid rgba(148,163,184,.18);background:rgba(8,12,22,.88);box-shadow:0 18px 50px rgba(0,0,0,.42);backdrop-filter:blur(18px) saturate(150%)}.settings-mobile-update{min-height:56px;display:flex;align-items:center;justify-content:center;gap:.55rem;padding:0 1rem;border-radius:17px;border:0;color:#080a12;background:linear-gradient(135deg,#f8c14a,#a78bfa);font-weight:950;touch-action:manipulation;pointer-events:auto}.settings-mobile-update .material-icons{color:#080a12}.settings-mobile-signout{min-height:56px;display:flex;align-items:center;justify-content:center;gap:.55rem;margin:0;padding:0 1rem;border-radius:17px;border:1px solid rgba(248,113,113,.22);color:#fecaca;text-decoration:none;background:rgba(127,29,29,.16);font-weight:950}.settings-mobile-signout .material-icons{color:#fecaca}.users-panel{padding:.75rem!important}.users-title{margin-bottom:.55rem}.user-line{min-height:52px;grid-template-columns:34px minmax(0,1fr) 22px;padding:.46rem .52rem}.avatar.mini{width:34px;height:34px;border-radius:11px}.user-copy strong{font-size:.94rem}.user-copy small{font-size:.74rem}.user-tools{padding:0 .52rem .52rem;gap:.42rem}.tool-buttons button{min-height:36px}.inline-field input,.inline-field select{min-height:38px}.mini-history{font-size:.72rem}}
 
 
   .update-modal-backdrop { position: fixed; inset: 0; z-index: 99999; display: grid; place-items: center; padding: clamp(.9rem, 3vw, 2rem); background: radial-gradient(circle at 50% 0%, rgba(167,139,250,.18), transparent 34%), rgba(2,5,13,.76); backdrop-filter: blur(22px) saturate(150%); }
