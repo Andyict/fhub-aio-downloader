@@ -224,14 +224,17 @@ async fn ensure_updater_helper() -> Result<String, String> {
 }
 
 
-async fn local_image_commit(image: &str) -> Option<String> {
+async fn inspect_image_labels(image: &str) -> Option<serde_json::Value> {
     let inspect_path = format!("/images/{}/json", urlencoding::encode(image));
     let Ok((status, body)) = docker_request("GET", &inspect_path, None).await else { return None; };
     if status != 200 { return None; }
     let Ok(value) = serde_json::from_str::<serde_json::Value>(&body) else { return None; };
-    value
-        .pointer("/Config/Labels/org.opencontainers.image.revision")
-        .and_then(|v| v.as_str())
+    value.pointer("/Config/Labels").cloned()
+}
+
+async fn local_image_commit(image: &str) -> Option<String> {
+    inspect_image_labels(image).await
+        .and_then(|labels| labels.get("org.opencontainers.image.revision").and_then(|v| v.as_str()).map(str::to_string))
         .map(|v| v.trim().to_string())
         .filter(|v| !v.is_empty() && v != "dev")
 }
@@ -477,6 +480,9 @@ pub async fn perform_docker_update(image: String, container: String) -> Result<J
     let host_config = inspect_json.get("HostConfig").cloned().unwrap_or_else(|| json!({}));
     let mut config = inspect_json.get("Config").cloned().unwrap_or_else(|| json!({}));
     config["Image"] = json!(image);
+    let image_labels = inspect_image_labels(&image).await
+        .or_else(|| config.get("Labels").cloned())
+        .unwrap_or_else(|| json!({}));
     // Do not reuse inspected NetworkSettings as create-time NetworkingConfig.
     // Docker's inspect payload contains runtime endpoint details that can be stale
     // after renaming/stopping the old container. HostConfig.NetworkMode is enough
@@ -489,7 +495,7 @@ pub async fn perform_docker_update(image: String, container: String) -> Result<J
         "Cmd": config.get("Cmd").cloned().unwrap_or_else(|| json!(null)),
         "Entrypoint": config.get("Entrypoint").cloned().unwrap_or_else(|| json!(null)),
         "Image": image,
-        "Labels": config.get("Labels").cloned().unwrap_or_else(|| json!({})),
+        "Labels": image_labels,
         "ExposedPorts": config.get("ExposedPorts").cloned().unwrap_or_else(|| json!({})),
         "WorkingDir": config.get("WorkingDir").cloned().unwrap_or_else(|| json!("")),
         "HostConfig": host_config,

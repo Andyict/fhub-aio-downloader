@@ -315,7 +315,7 @@
     event?.stopPropagation();
     if (updatingApp || updateClickLock) return;
     updateClickLock = true;
-    updateMessage = "Đang chuẩn bị cập nhật FHub...";
+    updateMessage = "Sẵn sàng cập nhật FHub.";
     if (!updateStatus?.updater_available) {
       await checkUpdateStatus();
     }
@@ -324,7 +324,7 @@
       updateClickLock = false;
       return;
     }
-    await confirmWebUpdate();
+    showUpdateConfirm = true;
     updateClickLock = false;
   }
 
@@ -340,7 +340,7 @@
   }
 
   async function confirmWebUpdate() {
-    showUpdateConfirm = false;
+    showUpdateConfirm = true;
     updatingApp = true;
     updateReloadScheduled = false;
     updateMessage = "Đang update FHub... Giữ nguyên trang này, hệ thống sẽ tự làm mới sau 1 phút.";
@@ -643,6 +643,42 @@
       </button>
     {/each}
   </nav>
+
+  {#if showUpdateConfirm || updatingApp}
+    <div class="update-modal-backdrop" role="dialog" aria-modal="true" aria-label="Xác nhận cập nhật FHub">
+      <div class="update-modal">
+        <div class="update-modal-glow glow-one"></div>
+        <div class="update-modal-glow glow-two"></div>
+        {#if !updatingApp}
+          <button type="button" class="update-modal-close" onclick={() => showUpdateConfirm = false} aria-label="Đóng"><span class="material-icons">close</span></button>
+        {/if}
+        <div class="update-modal-head compact">
+          <div class="update-modal-mark"><span class="material-icons">{updatingApp ? "sync" : "system_update_alt"}</span></div>
+          <span class="update-modal-kicker">FHUB UPDATE</span>
+          <h2>{updatingApp ? "Đang update" : "Xác nhận update"}</h2>
+          <p>{updatingApp ? "FHub đang kéo image mới, recreate container và kiểm tra health. Trang sẽ tự làm mới sau 1 phút." : "FHub sẽ kéo image mới nhất từ GHCR, khởi động lại container và giữ nguyên dữ liệu hiện có."}</p>
+        </div>
+        <div class="update-version-grid">
+          <div class="update-version-card"><span>Hiện tại</span><strong>{updateCurrentLabel}</strong></div>
+          <div class="update-version-arrow"><span class="material-icons">arrow_forward</span></div>
+          <div class="update-version-card latest"><span>Mới nhất</span><strong>{updateStatus?.latest_commit || "latest"}</strong></div>
+        </div>
+        <div class="update-modal-note">
+          <span class="material-icons">{updatingApp ? "hourglass_top" : "info"}</span>
+          <p>{updatingApp ? updateMessage : "Không đóng trang trong lúc update. Nếu container restart làm ngắt request, FHub vẫn sẽ tự làm mới trang sau 1 phút."}</p>
+        </div>
+        <div class="update-modal-actions simple">
+          {#if updatingApp}
+            <button type="button" class="update-cancel-button" disabled>Đang cập nhật</button>
+            <button type="button" class="update-confirm-button" disabled><span class="material-icons">sync</span>Làm mới sau 1 phút</button>
+          {:else}
+            <button type="button" class="update-cancel-button" onclick={() => showUpdateConfirm = false}>Huỷ</button>
+            <button type="button" class="update-confirm-button" onclick={confirmWebUpdate}><span class="material-icons">upgrade</span>Update</button>
+          {/if}
+        </div>
+      </div>
+    </div>
+  {/if}
 
   <section class="settings-grid overview-grid">
     {#if activeTab === "overview"}

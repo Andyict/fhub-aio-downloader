@@ -95,7 +95,9 @@
   let pendingDownloadName = $state("");
   let pendingDownloadSize = $state(0);
   let recursive = $state(true);
-  let seriesMode = $state(false);
+  let downloadMode = $state<"movie" | "series" | "auto-track">("movie");
+  const seriesMode = $derived(downloadMode === "series");
+  const autoTrackMode = $derived(downloadMode === "auto-track");
   let showDownloadConfirm = $state(false);
   let confirmTapInProgress = $state(false);
   type LinkHistoryEntry = { url: string; title?: string };
@@ -355,11 +357,10 @@
       preview = await res.json();
       autoTrackEnabled = false;
       rememberLink(clean, preview?.folder_name || preview?.items?.find((item) => !item.is_directory)?.name);
-      showDownloadModeHelp = false;
       selectAllPreview();
       const count = downloadablePreviewItems.length || preview?.file_count || 0;
       const lookedLikeSeries = isFolderPreview(preview?.resolved_url) && count > 1;
-      seriesMode = lookedLikeSeries;
+      downloadMode = lookedLikeSeries ? "series" : "movie";
       status = isFolderPreview(preview?.resolved_url)
         ? `Đã check thư mục: ${count} file · ${formatBytes(preview?.total_size || selectedPreviewSize)}. Chọn file rồi xác nhận tải.`
         : `Đã check file: ${preview?.folder_name || downloadablePreviewItems[0]?.name || "FShare file"}. Xác nhận nếu muốn tải.`;
@@ -371,6 +372,10 @@
   }
 
   function confirmPreviewFromPanel() {
+    if (autoTrackMode) {
+      void createAutoTrackFromPreview();
+      return;
+    }
     openDownloadConfirm();
   }
 
@@ -846,18 +851,21 @@
       </div>
     {/if}
     {#if preview && downloadablePreviewItems.length > 1}
-      <div class="download-mode-toggle" class:series={seriesMode} aria-label="Chọn kiểu tải">
+      <div class="download-mode-toggle" class:series={seriesMode} class:auto-track={autoTrackMode} aria-label="Chọn kiểu tải">
         <div class="mode-toggle-label">
-          <span class="material-icons">{seriesMode ? "video_library" : "movie"}</span>
-          <strong>{seriesMode ? "Phim bộ" : "Phim lẻ"}</strong>
+          <span class="material-icons">{autoTrackMode ? "sync" : seriesMode ? "video_library" : "movie"}</span>
+          <strong>{autoTrackMode ? "Auto Track" : seriesMode ? "Phim bộ" : "Phim lẻ"}</strong>
         </div>
-        <div class="mode-switch" role="group" aria-label="Chọn phim lẻ hoặc phim bộ">
+        <div class="mode-switch three-modes" role="group" aria-label="Chọn chế độ tải">
           <span class="mode-glow" aria-hidden="true"></span>
-          <button type="button" class:active={!seriesMode} aria-pressed={!seriesMode} onclick={() => (seriesMode = false)}>
+          <button type="button" class:active={downloadMode === "movie"} aria-pressed={downloadMode === "movie"} onclick={() => (downloadMode = "movie")}>
             <span class="material-icons">movie</span><strong>Phim lẻ</strong>
           </button>
-          <button type="button" class:active={seriesMode} aria-pressed={seriesMode} onclick={() => (seriesMode = true)}>
+          <button type="button" class:active={downloadMode === "series"} aria-pressed={downloadMode === "series"} onclick={() => (downloadMode = "series")}>
             <span class="material-icons">video_library</span><strong>Phim bộ</strong>
+          </button>
+          <button type="button" class:active={downloadMode === "auto-track"} aria-pressed={downloadMode === "auto-track"} onclick={() => (downloadMode = "auto-track")} disabled={!(preview.folder_code || isFolderPreview(preview.resolved_url) || isFolderPreview(preview.original_url))}>
+            <span class="material-icons">sync</span><strong>Auto Track</strong>
           </button>
         </div>
       </div>
@@ -888,10 +896,9 @@
       <div class="preview-confirm">
         <span>{selectedPreviewItems.length} file đã chọn · {formatBytes(selectedPreviewSize)}</span>
         <div class="preview-actions">
-          {#if preview.folder_code || isFolderPreview(preview.resolved_url) || isFolderPreview(preview.original_url)}
-            <button class="track-button" class:active={autoTrackEnabled} type="button" onclick={createAutoTrackFromPreview} disabled={checkLoading || downloadLoading || autoTrackLoading || autoTrackEnabled} aria-label="Auto Track" title={autoTrackEnabled ? "Đã bật Auto Track" : "Bật Auto Track"}><span class="material-icons">sync</span></button>
-          {/if}
-          <button type="button" onclick={confirmPreviewFromPanel} disabled={checkLoading || downloadLoading || !selectedPreviewItems.length}><span class="material-icons">download</span>Download</button>
+          <button type="button" onclick={confirmPreviewFromPanel} disabled={checkLoading || downloadLoading || autoTrackLoading || autoTrackEnabled || (autoTrackMode ? !(preview.folder_code || isFolderPreview(preview.resolved_url) || isFolderPreview(preview.original_url)) : !selectedPreviewItems.length)}>
+            <span class="material-icons">{autoTrackMode ? "sync" : "download"}</span>{autoTrackMode ? (autoTrackEnabled ? "Đã bật Auto Track" : "Bật Auto Track") : "Download"}
+          </button>
         </div>
       </div>
     </section>
@@ -1122,10 +1129,16 @@
   .mode-toggle-label strong { font-size: 0.9rem; font-weight: 950; text-transform: uppercase; letter-spacing: 0.08em; white-space: nowrap; }
   .mode-toggle-label small { min-width: 0; color: rgba(226, 232, 240, 0.68); font-size: 0.78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .mode-switch { position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.28rem; padding: 0.28rem; border: 1px solid rgba(148, 163, 184, 0.18); border-radius: 18px; background: rgba(2, 6, 23, 0.54); box-shadow: inset 0 1px 8px rgba(0, 0, 0, 0.28); }
+  .mode-switch.three-modes { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .mode-glow { position: absolute; inset: 0.28rem auto 0.28rem 0.28rem; width: calc(50% - 0.14rem); border-radius: 14px; background: linear-gradient(135deg, #60a5fa, #6366f1); box-shadow: 0 10px 24px rgba(96, 165, 250, 0.28); transition: transform 0.22s ease, background 0.22s ease, box-shadow 0.22s ease; }
+  .three-modes .mode-glow { width: calc(33.333% - 0.19rem); }
   .download-mode-toggle.series .mode-glow { transform: translateX(calc(100% + 0.28rem)); background: linear-gradient(135deg, #f8c14a, #ff8a1f); box-shadow: 0 10px 26px rgba(248, 193, 74, 0.3); }
+  .download-mode-toggle.auto-track .mode-glow { transform: translateX(calc(200% + 0.56rem)); background: linear-gradient(135deg, #38bdf8, #a78bfa); box-shadow: 0 10px 26px rgba(56, 189, 248, 0.28); }
+  .download-mode-toggle.auto-track { border-color: rgba(56, 189, 248, 0.28); }
+  .download-mode-toggle.auto-track .mode-toggle-label > .material-icons { color: #080a12; background: linear-gradient(135deg, #38bdf8, #a78bfa); }
   .mode-switch button { position: relative; z-index: 1; min-height: 58px; display: flex; align-items: center; justify-content: center; gap: 0.5rem; border: 0; border-radius: 14px; background: transparent; color: rgba(226, 232, 240, 0.6); cursor: pointer; transition: color 0.18s ease, transform 0.18s ease; }
   .mode-switch button:hover { color: #fff; transform: translateY(-1px); }
+  .mode-switch button:disabled { opacity: .42; cursor: not-allowed; transform: none; }
   .mode-switch button.active { color: #07111f; }
   .mode-switch button .material-icons { font-size: 1.2rem; }
   .mode-switch button strong { font-size: 1rem; font-weight: 1000; }
@@ -1140,7 +1153,9 @@
     .mode-toggle-label small { grid-column: 2; font-size: .68rem; }
     .mode-switch { padding: .2rem; gap: .2rem; border-radius: 13px; }
     .mode-glow { inset: .2rem auto .2rem .2rem; width: calc(50% - .1rem); border-radius: 10px; }
+    .three-modes .mode-glow { width: calc(33.333% - .14rem); }
     .download-mode-toggle.series .mode-glow { transform: translateX(calc(100% + .2rem)); }
+    .download-mode-toggle.auto-track .mode-glow { transform: translateX(calc(200% + .4rem)); }
     .mode-switch button { min-height: 42px; gap: .34rem; border-radius: 10px; }
     .mode-switch button .material-icons { font-size: 1rem; }
   }
@@ -1149,8 +1164,6 @@
 /* Compact collapsible download mode + rich history */
 .mode-toggle-label{grid-template-columns:30px auto minmax(0,1fr) 34px!important;}
 .mode-toggle-label>.material-icons{width:30px!important;height:30px!important;border-radius:10px!important;font-size:1.05rem!important;}
-.mode-info-button{width:34px!important;min-width:34px!important;height:34px!important;min-height:34px!important;padding:0!important;border-radius:999px!important;border:1px solid rgba(248,193,74,.38)!important;background:rgba(248,193,74,.12)!important;color:#f8c14a!important;font-weight:1000!important;font-size:1rem!important;line-height:1!important;}
-.mode-info-button:hover{background:linear-gradient(135deg,#f8c14a,#ff8a1f)!important;color:#111827!important;}
 .download-mode-toggle{padding:.62rem .68rem!important;border-radius:16px!important;gap:.5rem!important;margin:.1rem 0 .2rem!important;}
 
 .history-item-row{display:grid;grid-template-columns:minmax(0,1fr) 38px;gap:.4rem;align-items:center;}
@@ -1160,7 +1173,7 @@
 .history-item small{color:#8ea0b5;font-size:.68rem;margin-top:.08rem;}
 .history-copy{width:38px!important;min-width:38px!important;height:38px!important;min-height:38px!important;padding:0!important;border-radius:12px!important;}
 .history-copy .material-icons{font-size:1rem!important;}
-@media(max-width:560px){.mode-toggle-label{grid-template-columns:26px auto minmax(0,1fr) 30px!important}.mode-info-button{width:30px!important;min-width:30px!important;height:30px!important;min-height:30px!important}.download-mode-toggle{padding:.48rem .52rem!important}.mode-switch button{min-height:38px!important}.history-item-row{grid-template-columns:minmax(0,1fr) 34px}.history-copy{width:34px!important;min-width:34px!important;height:34px!important;min-height:34px!important}}
+@media(max-width:560px){.mode-toggle-label{grid-template-columns:26px minmax(0,1fr)!important}.download-mode-toggle{padding:.48rem .52rem!important}.mode-switch button{min-height:38px!important}.mode-switch button strong{font-size:.78rem}.mode-switch button .material-icons{font-size:.94rem}.history-item-row{grid-template-columns:minmax(0,1fr) 34px}.history-copy{width:34px!important;min-width:34px!important;height:34px!important;min-height:34px!important}}
 
 
 .mode-help-box{display:grid;gap:.28rem;padding:.62rem .7rem;border:1px solid rgba(56,189,248,.18);border-radius:13px;background:rgba(56,189,248,.07);color:#dbeafe;font-size:.78rem;line-height:1.35;}
