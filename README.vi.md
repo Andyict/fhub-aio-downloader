@@ -4,16 +4,22 @@
 
 FHub là trình quản lý tải FShare dành cho NAS, có giao diện web, hỗ trợ tải nhiều luồng, quản lý tài khoản FShare và lưu file tải về theo thư mục media trên NAS.
 
-## Cài nhanh bằng Docker Compose
+## Cài nhanh bằng một file `docker-compose.yml`
 
-Cách này dùng image public đã build sẵn từ GHCR. Người dùng chỉ cần Docker và Docker Compose.
+Cách này dùng image public đã build sẵn từ GHCR. Người dùng chỉ cần Docker và Docker Compose; không cần build source.
 
 ```bash
-git clone https://github.com/Andyict/fhub-aio-downloader.git
-cd fhub-aio-downloader
+mkdir -p fhub && cd fhub
+nano docker-compose.yml
 mkdir -p /volume1/Video
 # Nếu thư mục lưu file của bạn không phải /volume1/Video, hãy sửa docker-compose.yml trước
 docker compose up -d
+```
+
+Nếu NAS của bạn dùng binary Compose cũ, thay lệnh cuối bằng:
+
+```bash
+docker-compose up -d
 ```
 
 Mở FHub:
@@ -98,15 +104,24 @@ docker compose up -d
 
 ### Cập nhật bằng nút trong web
 
-Trong **Settings**, FHub tự kiểm tra GitHub. Nếu có commit/image mới, web sẽ hiện nút **Update**.
+Trong **Settings**, FHub tự kiểm tra GitHub/GHCR. Nếu có commit/image mới, web sẽ hiện nút **Update**.
 
-FHub là app một container. Để nút Update trong web tự pull/recreate container, dùng mẫu compose mới có mount Docker socket trực tiếp vào container `fhub`:
+FHub được cài bằng một service trong `docker-compose.yml`. Bạn **không cần** khai báo thêm service updater riêng. Khi cập nhật qua web, FHub có thể tự tạo một helper container tạm từ chính image FHub để pull/recreate container chính an toàn và healthcheck/rollback nếu lỗi.
+
+Để nút Update trong web hoạt động, compose cần mount Docker socket trực tiếp vào container `fhub`:
 
 ```yaml
 - /var/run/docker.sock:/var/run/docker.sock
 ```
 
-Không cần service/helper updater riêng. Sau khi cập nhật `docker-compose.yml`, chạy:
+Đồng thời giữ đúng tên container/image update:
+
+```yaml
+- FHUB_CONTAINER_NAME=fhub
+- FHUB_UPDATE_IMAGE=ghcr.io/andyict/fhub-aio:latest
+```
+
+Sau khi cập nhật `docker-compose.yml`, chạy:
 
 ```bash
 docker compose up -d

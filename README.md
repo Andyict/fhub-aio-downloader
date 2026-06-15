@@ -4,16 +4,22 @@ English | [Tiếng Việt](README.vi.md)
 
 FHub is a NAS-focused FShare download manager with a web dashboard, segmented downloads, FShare account support, and media-friendly download organization.
 
-## Quick install with Docker Compose
+## Quick install with one `docker-compose.yml`
 
-This method uses a public prebuilt GHCR image. Users only need Docker and Docker Compose.
+This method uses the public prebuilt GHCR image. Users only need Docker and Docker Compose; no source build is required.
 
 ```bash
-git clone https://github.com/Andyict/fhub-aio-downloader.git
-cd fhub-aio-downloader
+mkdir -p fhub && cd fhub
+nano docker-compose.yml
 mkdir -p /volume1/Video
 # Edit docker-compose.yml first if your download folder is not /volume1/Video
 docker compose up -d
+```
+
+If your NAS uses the legacy Compose binary, replace the last command with:
+
+```bash
+docker-compose up -d
 ```
 
 Open FHub:
@@ -98,12 +104,21 @@ docker compose up -d
 
 ### Web update notice
 
-In **Settings**, FHub checks GitHub for a newer image. When one is available, the web UI shows a compact update notice and can update the running container.
+In **Settings**, FHub checks GitHub/GHCR for a newer image. When one is available, the web UI can update the running container.
 
-FHub intentionally ships as a single-container app. It does not require a separate updater helper container for normal use. For web updates, mount Docker socket into `fhub` as shown in `docker-compose.yml`:
+FHub intentionally installs from a single `docker-compose.yml` service. You do **not** need to define a separate updater service in Compose. During a web update, FHub may create a short-lived helper container from the same FHub image so the main `fhub` container can be safely pulled/recreated and health-checked.
+
+For web updates to work, mount Docker socket into `fhub` as shown in `docker-compose.yml`:
 
 ```yaml
 - /var/run/docker.sock:/var/run/docker.sock
+```
+
+Also keep these environment variables aligned with your Compose service/container name:
+
+```yaml
+- FHUB_CONTAINER_NAME=fhub
+- FHUB_UPDATE_IMAGE=ghcr.io/andyict/fhub-aio:latest
 ```
 
 ### Option 2: Auto-update with Watchtower
