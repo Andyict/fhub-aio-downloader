@@ -151,6 +151,7 @@
   let updateStatus = $state<UpdateStatus | null>(null);
   let checkingUpdate = $state(false);
   let updatingApp = $state(false);
+  let updateReloadScheduled = $state(false);
   let updateClickLock = false;
   let updateMessage = $state("");
   let updateCommandCopied = $state(false);
@@ -333,22 +334,37 @@
     await runWebUpdate(event);
   }
 
+  function scheduleUpdateReload() {
+    updateReloadScheduled = true;
+    window.setTimeout(() => window.location.reload(), 60_000);
+  }
+
   async function confirmWebUpdate() {
     showUpdateConfirm = false;
     updatingApp = true;
-    updateMessage = "Đang cập nhật FHub... Vui lòng chờ, ứng dụng sẽ tự khởi động lại.";
+    updateReloadScheduled = false;
+    updateMessage = "Đang update FHub... Giữ nguyên trang này, hệ thống sẽ tự làm mới sau 1 phút.";
     try {
       const response = await fetch("/api/update/run", { method: "POST", credentials: "include" });
       const result = response.ok ? await response.json() : { success: false, message: await response.text() };
       const rawMessage = result.message || (result.success ? "Đã bắt đầu cập nhật." : "Cập nhật thất bại.");
+      if (result.success) {
+        updateMessage = "Đã gửi lệnh update. FHub đang kéo bản mới và khởi động lại; trang sẽ tự làm mới sau 1 phút.";
+        scheduleUpdateReload();
+        return;
+      }
       updateMessage = /permission denied|docker socket|var\/run\/docker\.sock/i.test(rawMessage)
-        ? "Đã copy lệnh update Docker. Chạy lệnh này trên NAS/Portainer để cập nhật FHub."
+        ? "Chưa có quyền update Docker. Cần mount /var/run/docker.sock vào container FHub rồi restart một lần."
         : rawMessage;
-      if (result.success) setTimeout(() => window.location.reload(), 12000);
     } catch (error) {
-      updateMessage = error instanceof Error ? error.message : "Không chạy được cập nhật.";
+      updateMessage = "Đã gửi lệnh update. Nếu FHub đang khởi động lại, trang sẽ tự làm mới sau 1 phút.";
+      scheduleUpdateReload();
+      return;
     } finally {
-      updatingApp = false;
+      if (!updateReloadScheduled) {
+        updatingApp = false;
+        updateClickLock = false;
+      }
     }
   }
 
@@ -606,11 +622,11 @@
     <section class="update-banner available" aria-label="FHub update available">
       <div class="update-icon"><span class="material-icons">system_update_alt</span></div>
       <div class="update-copy">
-        <strong>{uiLanguage === "vi" ? "Có bản cập nhật mới" : "Update available"}</strong>
-        <small>{`Hiện tại ${updateCurrentLabel} · Mới nhất ${updateStatus?.latest_commit}`}</small>
+        <strong>{updatingApp ? "Đang update FHub" : (uiLanguage === "vi" ? "Có bản cập nhật mới" : "Update available")}</strong>
+        <small>{updatingApp ? updateMessage : `Hiện tại ${updateCurrentLabel} · Mới nhất ${updateStatus?.latest_commit}`}</small>
       </div>
       <div class="update-actions">
-        {#if checkingUpdate}<small>Đang kiểm tra...</small>{/if}
+        {#if updatingApp}<small>Trang tự làm mới sau 1 phút</small>{:else if checkingUpdate}<small>Đang kiểm tra...</small>{/if}
       </div>
     </section>
   {/if}
