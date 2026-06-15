@@ -624,6 +624,15 @@
     {/each}
   </nav>
 
+  {#if activeTab === "overview" && shouldShowUpdateBanner}
+    <div class="settings-mobile-actions">
+      <button type="button" class="settings-mobile-update mobile-update-link" disabled={updatingApp} onclick={runWebUpdate} aria-label="Update FHub">
+        <span class="material-icons">upgrade</span>
+        <strong>{updatingApp ? "Đang update..." : "Update FHub"}</strong>
+      </button>
+    </div>
+  {/if}
+
   <section class="settings-grid overview-grid">
     {#if activeTab === "overview"}
       <article class="panel wide ui-mode-panel">{@render UiModePanel()}</article>
@@ -637,14 +646,6 @@
     {/if}
   </section>
 
-  {#if activeTab === "overview" && shouldShowUpdateBanner}
-    <div class="settings-mobile-actions">
-      <button type="button" class="settings-mobile-update mobile-update-link" disabled={updatingApp} onclick={runWebUpdate} aria-label="Update FHub">
-        <span class="material-icons">upgrade</span>
-        <strong>{updatingApp ? "Đang update..." : "Update FHub"}</strong>
-      </button>
-    </div>
-  {/if}
 </div>
 
 
