@@ -151,6 +151,7 @@
   let updateStatus = $state<UpdateStatus | null>(null);
   let checkingUpdate = $state(false);
   let updatingApp = $state(false);
+  let updateClickLock = false;
   let updateMessage = $state("");
   let updateCommandCopied = $state(false);
   let showUpdateConfirm = $state(false);
@@ -308,14 +309,22 @@
     }
   }
 
-  async function runWebUpdate() {
-    if (updatingApp) return;
+  async function runWebUpdate(event?: Event) {
+    event?.preventDefault();
+    event?.stopPropagation();
+    if (updatingApp || updateClickLock) return;
+    updateClickLock = true;
     updateMessage = "Đang chuẩn bị cập nhật FHub...";
     if (!updateStatus?.updater_available) {
+      await checkUpdateStatus();
+    }
+    if (!updateStatus?.updater_available) {
       updateMessage = "Chưa bật quyền update trong web. Cần mount /var/run/docker.sock vào container FHub rồi restart một lần.";
+      updateClickLock = false;
       return;
     }
     await confirmWebUpdate();
+    updateClickLock = false;
   }
 
   async function confirmWebUpdate() {
@@ -565,6 +574,10 @@
         <span class="material-icons">refresh</span>
         {uiLanguage === "vi" ? "Làm mới" : "Refresh"}
       </button>
+      <button type="button" class="primary-button header-update-button" onpointerup={runWebUpdate} onclick={runWebUpdate} disabled={updatingApp} aria-label="Update FHub">
+        <span class="material-icons">upgrade</span>
+        {updatingApp ? "Đang update..." : "Update"}
+      </button>
     </div>
   </section>
 
@@ -589,7 +602,7 @@
         <small>{`Hiện tại ${updateCurrentLabel} · Mới nhất ${updateStatus?.latest_commit}`}</small>
       </div>
       <div class="update-actions">
-        <button type="button" class="primary-button update-now" onclick={runWebUpdate} disabled={updatingApp}>
+        <button type="button" class="primary-button update-now" onpointerup={runWebUpdate} onclick={runWebUpdate} disabled={updatingApp}>
           <span class="material-icons">upgrade</span>
           {updatingApp ? "Đang update..." : "Update"}
         </button>
@@ -918,7 +931,8 @@
   h1 { margin-top: .55rem; max-width: 800px; color: #fff; font-size: clamp(4rem,7vw,7.4rem); font-weight: 950; line-height: .9; letter-spacing: -.06em; }
   h2 { color: #fff; font-size: clamp(1.25rem,2.1vw,1.6rem); line-height: 1.1; letter-spacing: -.04em; }
   .hero-copy p { max-width: 700px; margin-top: 1rem; color: rgba(226,232,240,.7); font-size: 1.06rem; line-height: 1.55; }
-  .hero-actions { display: grid; gap: .8rem; justify-items: end; }
+  .hero-actions { display: flex; flex-wrap: wrap; gap: .65rem; justify-content: flex-end; align-items: center; pointer-events: auto; }
+  .header-update-button { width: auto; min-width: 118px; pointer-events: auto; display: inline-flex; align-items: center; justify-content: center; gap: .45rem; }
   .ghost-button, .primary-button, .danger-button, .user-row button { min-height: 48px; border-radius: 14px; padding: 0 1rem; border: 1px solid rgba(148,163,184,.16); color: #f8fafc; background: rgba(255,255,255,.06); font-weight: 900; }
   .ghost-button { display: inline-flex; align-items: center; gap: .45rem; background: rgba(255,255,255,.08); }
   .hero-signal { display: inline-flex; align-items: center; gap: .5rem; color: rgba(226,232,240,.72); font-size: .82rem; font-weight: 800; }
