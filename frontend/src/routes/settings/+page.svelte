@@ -137,6 +137,7 @@
   let downloadAdvancedOpen = $state(false);
   let autoTrackIntervalSecs = $state(3600);
   let autoTrackSaving = $state(false);
+  let autoTrackSavedMessage = $state("");
   let status = $state("Đang tải cấu hình thật từ FHUB...");
   let saving = $state(false);
   let userSaving = $state(false);
@@ -421,8 +422,10 @@
       });
       const result = response.ok ? await response.json() : { success: false, message: await response.text() };
       if (!response.ok || result.success === false) throw new Error(result.message || "Lưu Auto Track thất bại");
-      status = `Đã lưu Auto Track: quét mỗi ${formatAutoTrackInterval(autoTrackIntervalSecs)}.`;
+      autoTrackSavedMessage = `Đã lưu · Tự track mỗi ${formatAutoTrackInterval(autoTrackIntervalSecs)}`;
+      status = `Đã lưu Auto Track: quét mỗi ${formatAutoTrackInterval(autoTrackIntervalSecs)}. Các track hiện có đã được cập nhật.`;
     } catch (error) {
+      autoTrackSavedMessage = "Lưu thất bại";
       status = error instanceof Error ? error.message : "Lưu Auto Track thất bại";
     } finally {
       autoTrackSaving = false;
@@ -715,16 +718,17 @@
     </div>
     <div class="autotrack-presets" role="group" aria-label="Auto Track interval">
       {#each [900, 1800, 3600, 10800, 21600] as interval}
-        <button type="button" class:active={Number(autoTrackIntervalSecs) === interval} onclick={() => autoTrackIntervalSecs = interval}>
+        <button type="button" class:active={Number(autoTrackIntervalSecs) === interval} onclick={() => { autoTrackIntervalSecs = interval; autoTrackSavedMessage = ""; }}>
           {formatAutoTrackInterval(interval)}
         </button>
       {/each}
     </div>
     <label class="autotrack-slider">
       <span>Tuỳ chỉnh <small>{formatAutoTrackInterval(autoTrackIntervalSecs)}</small></span>
-      <input type="range" min="300" max="21600" step="300" bind:value={autoTrackIntervalSecs} />
+      <input type="range" min="300" max="21600" step="300" bind:value={autoTrackIntervalSecs} oninput={() => autoTrackSavedMessage = ""} />
     </label>
     <button type="button" class="primary-button compact-save" onclick={saveAutoTrackSettings} disabled={autoTrackSaving}>{autoTrackSaving ? "Đang lưu..." : "Lưu Auto Track"}</button>
+    {#if autoTrackSavedMessage}<div class="save-ok"><span class="material-icons">check_circle</span>{autoTrackSavedMessage}</div>{/if}
   </div>
 {/snippet}
 
@@ -1023,6 +1027,8 @@
   .autotrack-slider { display: grid; gap: .45rem; padding: .72rem; border-radius: 14px; background: rgba(255,255,255,.04); }
   .autotrack-slider span { display: flex; justify-content: space-between; gap: .7rem; color: #f8fafc; font-weight: 900; }
   .autotrack-slider small { color: #f8c14a; }
+  .save-ok { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; min-height: 38px; padding: 0 .75rem; border-radius: 12px; color: #86efac; background: rgba(34,197,94,.12); border: 1px solid rgba(34,197,94,.22); font-weight: 900; }
+  .save-ok .material-icons { color: #86efac; font-size: 1.1rem; }
   .download-preset-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .55rem; }
   .download-preset-grid button { min-height: 82px; display: grid; align-content: center; gap: .14rem; padding: .55rem .45rem; border-radius: 15px; text-align: left; color: #e5eef7; background: rgba(255,255,255,.045); border: 1px solid rgba(148,163,184,.16); }
   .download-preset-grid button.active { color: #080a12; border-color: transparent; background: linear-gradient(135deg,#f8c14a,#a78bfa); box-shadow: 0 14px 36px rgba(167,139,250,.18); }

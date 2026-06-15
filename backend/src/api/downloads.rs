@@ -392,6 +392,10 @@ async fn fetch_fshare_folder_page(
         ("linkcode", folder_code.to_string()),
         ("sort", "type".to_string()),
         ("page", page.to_string()),
+        // FShare's folder API uses `per-page` for page size. Keeping `limit`
+        // alone falls back to the service default (10), which made Discovery
+        // show/download only the first 10 episodes from a series folder.
+        ("per-page", "100".to_string()),
         ("limit", "100".to_string()),
     ];
 
@@ -779,21 +783,31 @@ async fn pause_download(
     Path(id): Path<String>,
 ) -> Result<Json<ActionResponse>, StatusCode> {
     let uuid = Uuid::parse_str(&id).map_err(|_| StatusCode::BAD_REQUEST)?;
-    
-    let task_result = state.download_orchestrator.task_manager().pause_task(uuid);
+
+    // Pause must update both the live TaskManager and the DB. The old handler
+    // only paused in-memory tasks, so queued/restored tasks appeared unchanged
+    // after refresh and the pause button looked broken.
+    let task_from_db = state.db.get_task_by_id(uuid).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let task_result = state.download_orchestrator.task_manager().pause_task(uuid).or_else(|| {
+        let mut task = task_from_db?;
+        if !task.state.can_pause() { return None; }
+        task.state = DownloadState::Paused;
+        state.download_orchestrator.task_manager().add_task(task.clone());
+        Some(task)
+    });
     let success = task_result.is_some();
-    
-    // Broadcast state change if successful
+
     if let Some(task) = task_result {
+        state.db.update_task_state_async(uuid, "PAUSED".to_string()).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         state.download_orchestrator.broadcast_task_update(&task);
     }
-    
+
     Ok(Json(ActionResponse {
         success,
-        message: if !success { 
-            Some("Task not found or cannot be paused".to_string()) 
-        } else { 
-            None 
+        message: if !success {
+            Some("Task not found or cannot be paused".to_string())
+        } else {
+            None
         },
     }))
 }
@@ -804,23 +818,33 @@ async fn resume_download(
     Path(id): Path<String>,
 ) -> Result<Json<ActionResponse>, StatusCode> {
     let uuid = Uuid::parse_str(&id).map_err(|_| StatusCode::BAD_REQUEST)?;
-    
-    let task_result = state.download_orchestrator.task_manager().resume_task(uuid);
+
+    let task_from_db = state.db.get_task_by_id(uuid).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let task_result = state.download_orchestrator.task_manager().resume_task(uuid).or_else(|| {
+        let mut task = task_from_db?;
+        if !task.state.can_resume() { return None; }
+        task.cancel_token = tokio_util::sync::CancellationToken::new();
+        task.state = DownloadState::Queued;
+        task.retry_count = 0;
+        task.wait_until = None;
+        task.error_message = None;
+        state.download_orchestrator.task_manager().add_task(task.clone());
+        Some(task)
+    });
     let success = task_result.is_some();
-    
-    // Broadcast state change if successful
+
     if let Some(task) = task_result {
+        state.db.update_task_state_async(uuid, "QUEUED".to_string()).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         state.download_orchestrator.broadcast_task_update(&task);
-        // Wake idle workers to process the resumed task
         state.download_orchestrator.wake_workers();
     }
-    
+
     Ok(Json(ActionResponse {
         success,
-        message: if !success { 
-            Some("Task not found or not paused".to_string()) 
-        } else { 
-            None 
+        message: if !success {
+            Some("Task not found or not paused".to_string())
+        } else {
+            None
         },
     }))
 }

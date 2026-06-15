@@ -171,7 +171,10 @@ async fn update_auto_track_settings(
     if let Err(e) = state.db.save_setting("auto_track_check_interval_secs", &value.to_string()) {
         return Json(ActionResponse { success: false, message: Some(format!("Failed to save Auto Track settings: {}", e)) });
     }
-    Json(ActionResponse { success: true, message: Some("Auto Track settings updated successfully".to_string()) })
+    if let Err(e) = state.db.update_all_auto_track_intervals_async(value).await {
+        return Json(ActionResponse { success: false, message: Some(format!("Failed to update existing Auto Tracks: {}", e)) });
+    }
+    Json(ActionResponse { success: true, message: Some("Đã lưu Auto Track và cập nhật các track hiện có".to_string()) })
 }
 
 async fn generate_api_key() -> Json<GenerateKeyResponse> {

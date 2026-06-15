@@ -287,9 +287,22 @@ impl DownloadOrchestrator {
         let download_dir = {
             self.config.read().await.download_dir.clone()
         };
+
+        // Safety net for TV-series downloads: if metadata arrived without season/episode,
+        // infer it from the real filename so episodes never collapse into one movie-style file.
+        if category == "tv" {
+            if let Some(ref mut meta) = tmdb_metadata {
+                if meta.season.is_none() || meta.episode.is_none() {
+                    let parsed = FilenameParser::parse(&filename);
+                    if meta.season.is_none() { meta.season = parsed.season.map(|v| v as i32); }
+                    if meta.episode.is_none() { meta.episode = parsed.episode.map(|v| v as i32); }
+                }
+                meta.media_type = Some("tv".to_string());
+            }
+        }
         
         // Create FHub compatible filename if TMDB metadata exists
-        let final_filename = if let Some(mut meta) = tmdb_metadata.clone() {
+        let mut final_filename = if let Some(mut meta) = tmdb_metadata.clone() {
             // Extract file extension from original filename
             let extension = std::path::Path::new(&filename)
                 .extension()
@@ -363,7 +376,7 @@ impl DownloadOrchestrator {
         // Build destination with FHub-compatible filename.
         // Manual series mode uses folder_name when TMDB metadata is not available,
         // so every episode added with the same show title lands in one folder.
-        let destination = if tmdb_metadata.is_none() {
+        let mut destination = if tmdb_metadata.is_none() {
             if let Some(ref folder) = manual_folder_name {
                 let clean_folder = PathBuilder::sanitize_filename(folder);
                 if !clean_folder.is_empty() {
@@ -377,6 +390,53 @@ impl DownloadOrchestrator {
         } else {
             self.build_destination_path(&final_filename, &category, &tmdb_metadata, &download_dir)
         };
+
+        // Duplicate guard by final destination. FShare folders may contain multiple encodes
+        // or links for the same episode with different linkcodes; fshare_code-only duplicate
+        // detection is not enough and can create 2x/3x queue entries for one episode.
+        if let Some(existing) = self.task_manager.get_tasks().into_iter().find(|t| t.destination == destination) {
+            if matches!(existing.state, DownloadState::Queued | DownloadState::Starting | DownloadState::Downloading | DownloadState::Waiting | DownloadState::Paused | DownloadState::Completed) {
+                tracing::info!("Duplicate detected by destination in memory: {} already exists as {} in state {:?}, skipping", destination, existing.id, existing.state);
+                return Err(anyhow::anyhow!("Download destination already exists ({:?})", existing.state));
+            }
+        }
+        if let Some(db) = &self.db {
+            match db.find_task_by_destination_async(&destination).await {
+                Ok(Some((existing_id, existing_state))) => match existing_state.as_str() {
+                    "QUEUED" | "STARTING" | "DOWNLOADING" | "WAITING" | "PAUSED" | "COMPLETED" => {
+                        tracing::info!("Duplicate detected by destination in DB: {} already exists as {} in state {}, skipping", destination, existing_id, existing_state);
+                        return Err(anyhow::anyhow!("Download destination already exists ({})", existing_state));
+                    }
+                    "FAILED" | "CANCELLED" => {
+                        if let Ok(old_id) = uuid::Uuid::parse_str(&existing_id) {
+                            let _ = db.delete_task(old_id);
+                        }
+                    }
+                    _ => {}
+                },
+                Ok(None) => {}
+                Err(e) => tracing::warn!("Failed to check duplicate destination: {}", e),
+            }
+        }
+
+        // Final overwrite guard: never let a new download replace an existing file.
+        // This protects TV episodes even if upstream metadata/filename parsing regresses.
+        if std::path::Path::new(&destination).exists() {
+            let original_path = std::path::Path::new(&destination);
+            let parent = original_path.parent().map(|p| p.to_path_buf()).unwrap_or_else(|| download_dir.clone());
+            let stem = original_path.file_stem().and_then(|s| s.to_str()).unwrap_or("download");
+            let ext = original_path.extension().and_then(|e| e.to_str()).unwrap_or("mkv");
+            for idx in 2..=999 {
+                let candidate_name = format!("{} ({idx}).{}", stem, ext);
+                let candidate_path = parent.join(&candidate_name);
+                if !candidate_path.exists() {
+                    tracing::warn!("Destination already exists, avoiding overwrite: {} -> {}", destination, candidate_path.to_string_lossy());
+                    final_filename = candidate_name;
+                    destination = candidate_path.to_string_lossy().to_string();
+                    break;
+                }
+            }
+        }
 
         if let Some(ref folder) = manual_folder_name {
             if let Some(code) = &fshare_code {
@@ -889,11 +949,14 @@ impl DownloadOrchestrator {
             return 0;
         };
         
-        // Only load QUEUED and PAUSED tasks
+        // Load resumable tasks into memory so workers and pause/resume controls can see them.
         // DOWNLOADING/STARTING are transient states - if server restarts during download,
-        // those tasks should be re-queued, not restored with stale state
+        // those tasks should be re-queued, not restored with stale state.
+        // WAITING is persistent retry state; it must be restored too, otherwise a task that
+        // was waiting for retry during restart can be left stuck forever in DB/UI.
         let states = vec![
             "QUEUED".to_string(),
+            "WAITING".to_string(),
             "PAUSED".to_string(),
         ];
         

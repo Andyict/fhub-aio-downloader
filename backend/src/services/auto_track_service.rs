@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -57,12 +58,64 @@ impl AutoTrackService {
         if track.created_at.is_empty() { track.created_at = now.clone(); }
         track.updated_at = now;
         self.db.upsert_auto_track_async(track.clone()).await?;
-        Ok(track)
+        Ok(self.db
+            .get_auto_track_by_folder_async(track.media_type.clone(), track.folder_code.clone())
+            .await?
+            .unwrap_or(track))
+    }
+
+    pub async fn baseline_track(&self, track_id: &str) -> Result<AutoTrackCheckReport> {
+        let mut track = self.db.get_auto_track_async(track_id.to_string()).await?.ok_or_else(|| anyhow!("Không tìm thấy auto track"))?;
+        let files = dedupe_episode_files(collect_fshare_files(&self.client, &track.folder_url, true, 0).await?);
+        let mut new_items = 0usize;
+        let mut skipped = 0usize;
+
+        for file in files.iter().filter(|f| !f.fshare_code.is_empty()) {
+            if self.db.get_auto_track_item_by_code_async(track.id.clone(), file.fshare_code.clone()).await?.is_some() {
+                skipped += 1;
+                continue;
+            }
+            new_items += 1;
+            let parsed = FilenameParser::parse(&file.name);
+            let season = file.season.or(parsed.season).map(|v| v as i32).or(track.season);
+            let episode = file.episode.or(parsed.episode).map(|v| v as i32);
+            let item = AutoTrackItem {
+                id: Uuid::new_v4().to_string(),
+                track_id: track.id.clone(),
+                fshare_code: file.fshare_code.clone(),
+                file_name: file.name.clone(),
+                file_url: file.url.clone(),
+                file_size: file.size as i64,
+                season,
+                episode,
+                status: "seen".to_string(),
+                download_id: None,
+                first_seen_at: Utc::now().to_rfc3339(),
+                queued_at: None,
+                completed_at: None,
+                error_message: None,
+                auto_queued: false,
+            };
+            self.db.upsert_auto_track_item_async(item).await?;
+        }
+
+        track.last_checked_at = Some(Utc::now().to_rfc3339());
+        track.last_error = None;
+        track.updated_at = Utc::now().to_rfc3339();
+        self.db.upsert_auto_track_async(track.clone()).await?;
+        Ok(AutoTrackCheckReport { track_id: track.id, seen: files.len(), new_items, queued: 0, skipped, message: format!("Đã ghi nhận baseline {} file hiện có, không queue tải.", files.len()) })
     }
 
     pub async fn check_track(&self, track_id: &str) -> Result<AutoTrackCheckReport> {
         let mut track = self.db.get_auto_track_async(track_id.to_string()).await?.ok_or_else(|| anyhow!("Không tìm thấy auto track"))?;
-        let files = collect_fshare_files(&self.client, &track.folder_url, true, 0).await?;
+        // Mark the attempt at the beginning so the UI shows the real background
+        // watcher activity even if FShare scan/download matching later fails or is slow.
+        track.last_checked_at = Some(Utc::now().to_rfc3339());
+        track.last_error = None;
+        track.updated_at = Utc::now().to_rfc3339();
+        self.db.upsert_auto_track_async(track.clone()).await?;
+
+        let files = dedupe_episode_files(collect_fshare_files(&self.client, &track.folder_url, true, 0).await?);
         let mut new_items = 0usize;
         let mut queued = 0usize;
         let mut skipped = 0usize;
@@ -93,6 +146,7 @@ impl AutoTrackService {
                 queued_at: None,
                 completed_at: None,
                 error_message: None,
+                auto_queued: false,
             };
 
             let meta = TmdbDownloadMetadata {
@@ -118,6 +172,7 @@ impl AutoTrackService {
                     item.status = "queued".to_string();
                     item.download_id = Some(task.id.to_string());
                     item.queued_at = Some(Utc::now().to_rfc3339());
+                    item.auto_queued = true;
                     queued += 1;
                 }
                 Err(e) => {
@@ -136,10 +191,21 @@ impl AutoTrackService {
     }
 
     pub async fn check_due_tracks(&self) {
-        let Ok(tracks) = self.db.list_due_auto_tracks_async().await else { return; };
+        let tracks = match self.db.list_due_auto_tracks_async().await {
+            Ok(tracks) => tracks,
+            Err(e) => {
+                tracing::warn!("Auto-track due list failed: {}", e);
+                return;
+            }
+        };
+        tracing::info!(count = tracks.len(), "Auto-track due list loaded");
+        if !tracks.is_empty() {
+            tracing::info!(count = tracks.len(), "Auto-track due check starting");
+        }
         for track in tracks {
+            tracing::info!(track_id=%track.id, title=%track.title, "Auto-track checking due track");
             if let Err(e) = self.check_track(&track.id).await {
-                tracing::warn!(track_id=%track.id, "Auto-track check failed: {}", e);
+                tracing::warn!(track_id=%track.id, title=%track.title, "Auto-track check failed: {}", e);
                 let _ = self.db.update_auto_track_error_async(track.id, e.to_string()).await;
             }
         }
@@ -169,7 +235,15 @@ fn extract_folder_token(folder_url: &str) -> Option<String> {
 }
 
 async fn fetch_page(client: &reqwest::Client, folder_code: &str, token: Option<&str>, page: u32) -> Result<Vec<serde_json::Value>> {
-    let mut query = vec![("linkcode", folder_code.to_string()), ("sort", "type".to_string()), ("page", page.to_string()), ("limit", "100".to_string())];
+    let mut query = vec![
+        ("linkcode", folder_code.to_string()),
+        ("sort", "type".to_string()),
+        ("page", page.to_string()),
+        // FShare uses `per-page` for folder page size. `limit` alone falls
+        // back to the default page size (10), so keep both for compatibility.
+        ("per-page", "100".to_string()),
+        ("limit", "100".to_string()),
+    ];
     if let Some(t) = token.filter(|s| !s.is_empty()) { query.push(("token", t.to_string())); }
     let body: serde_json::Value = client.get("https://www.fshare.vn/api/v3/files/folder")
         .query(&query)
@@ -182,6 +256,38 @@ async fn fetch_page(client: &reqwest::Client, folder_code: &str, token: Option<&
 
 fn str_field(v: &serde_json::Value, key: &str) -> Option<String> { v.get(key).and_then(|x| x.as_str().map(str::to_string).or_else(|| x.as_i64().map(|n| n.to_string()))) }
 fn u64_field(v: &serde_json::Value, key: &str) -> u64 { v.get(key).and_then(|x| x.as_u64().or_else(|| x.as_str()?.parse().ok())).unwrap_or(0) }
+
+fn episode_quality_score(file: &FshareTrackFile) -> u64 {
+    let name = file.name.to_lowercase();
+    let resolution_score = if name.contains("2160p") || name.contains("4k") { 4_000_000_000 }
+        else if name.contains("1080p") { 2_000_000_000 }
+        else if name.contains("720p") { 1_000_000_000 }
+        else { 0 };
+    let codec_score = if name.contains("h.265") || name.contains("x265") || name.contains("hevc") { 200_000_000 } else { 0 };
+    let hdr_score = if name.contains("dv") || name.contains("hdr") { 100_000_000 } else { 0 };
+    resolution_score + codec_score + hdr_score + file.size
+}
+
+fn dedupe_episode_files(files: Vec<FshareTrackFile>) -> Vec<FshareTrackFile> {
+    let mut episodic: HashMap<(u32, u32), FshareTrackFile> = HashMap::new();
+    let mut loose = Vec::new();
+    for file in files {
+        match (file.season, file.episode) {
+            (Some(season), Some(episode)) => {
+                let key = (season, episode);
+                let replace = episodic.get(&key)
+                    .map(|existing| episode_quality_score(&file) > episode_quality_score(existing))
+                    .unwrap_or(true);
+                if replace { episodic.insert(key, file); }
+            }
+            _ => loose.push(file),
+        }
+    }
+    let mut out: Vec<FshareTrackFile> = episodic.into_values().collect();
+    out.sort_by_key(|f| (f.season.unwrap_or(0), f.episode.unwrap_or(0), f.name.clone()));
+    out.extend(loose);
+    out
+}
 
 fn item_is_dir(v: &serde_json::Value) -> bool {
     let typ = str_field(v, "type").unwrap_or_default();

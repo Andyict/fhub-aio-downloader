@@ -41,6 +41,7 @@ pub struct AutoTrack {
     pub season: Option<i32>,
     pub batch_id: Option<String>,
     pub batch_name: Option<String>,
+    pub poster_url: Option<String>,
     pub last_checked_at: Option<String>,
     pub last_error: Option<String>,
     pub created_at: String,
@@ -63,6 +64,8 @@ pub struct AutoTrackItem {
     pub queued_at: Option<String>,
     pub completed_at: Option<String>,
     pub error_message: Option<String>,
+    #[serde(default)]
+    pub auto_queued: bool,
 }
 
 use r2d2::Pool;
@@ -429,6 +432,7 @@ impl Db {
                 season INTEGER,
                 batch_id TEXT,
                 batch_name TEXT,
+                poster_url TEXT,
                 last_checked_at TEXT,
                 last_error TEXT,
                 created_at TEXT NOT NULL,
@@ -451,11 +455,14 @@ impl Db {
                 queued_at TEXT,
                 completed_at TEXT,
                 error_message TEXT,
+                auto_queued INTEGER NOT NULL DEFAULT 0,
                 UNIQUE(track_id, fshare_code),
                 FOREIGN KEY(track_id) REFERENCES auto_tracks(id) ON DELETE CASCADE
             );
             CREATE INDEX IF NOT EXISTS idx_auto_track_items_track ON auto_track_items(track_id, status);"
         )?;
+        let _ = conn.execute("ALTER TABLE auto_tracks ADD COLUMN poster_url TEXT", []);
+        let _ = conn.execute("ALTER TABLE auto_track_items ADD COLUMN auto_queued INTEGER NOT NULL DEFAULT 0", []);
         
         // FTS5 virtual table for folder cache full-text search
         conn.execute_batch(
@@ -662,7 +669,8 @@ impl Db {
              downloaded, speed, eta,
              host, category, priority, segments, retry_count, created_at, 
              started_at, completed_at, wait_until, error_message, batch_id, batch_name,
-             tmdb_id, tmdb_title, tmdb_season, tmdb_episode, quality, resolution, arr_series_id, arr_movie_id 
+             tmdb_id, tmdb_title, tmdb_season, tmdb_episode, quality, resolution, arr_series_id, arr_movie_id,
+             fshare_code
              FROM downloads WHERE id = ?1"
         )?;
         let mut task_iter = stmt.query_map(params![id.to_string()], |row| Self::parse_task_from_row(row))?;
@@ -1157,6 +1165,72 @@ impl Db {
             let result: Option<(String, String)> = conn.query_row(
                 "SELECT id, state FROM downloads WHERE fshare_code = ?1 LIMIT 1",
                 params![&code],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            ).optional()?;
+            Ok(result)
+        }).await.unwrap()
+    }
+
+    pub async fn get_task_by_fshare_code_async(&self, fshare_code: String) -> Result<Option<DownloadTask>> {
+        let pool = self.pool.clone();
+        tokio::task::spawn_blocking(move || {
+            let conn = pool.get().map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+            let mut stmt = conn.prepare(
+                "SELECT id, url, original_url, filename, destination, state, progress, size,
+                 downloaded, speed, eta,
+                 host, category, priority, segments, retry_count, created_at,
+                 started_at, completed_at, wait_until, error_message, batch_id, batch_name,
+                 tmdb_id, tmdb_title, tmdb_season, tmdb_episode, quality, resolution, arr_series_id, arr_movie_id,
+                 fshare_code
+                 FROM downloads WHERE fshare_code = ?1 ORDER BY created_at DESC LIMIT 1"
+            )?;
+            let mut task_iter = stmt.query_map(params![fshare_code], |row| Self::parse_task_from_row(row))?;
+            match task_iter.next() {
+                Some(task) => Ok(Some(task?)),
+                None => Ok(None),
+            }
+        }).await.unwrap()
+    }
+
+    pub async fn get_task_by_title_episode_async(&self, title: String, season: i32, episode: i32) -> Result<Option<DownloadTask>> {
+        let pool = self.pool.clone();
+        tokio::task::spawn_blocking(move || {
+            let conn = pool.get().map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+            let episode_label = format!("S{:02}E{:02}", season, episode);
+            let title_like = format!("%{}%", title);
+            let episode_like = format!("%{}%", episode_label);
+            let mut stmt = conn.prepare(
+                "SELECT id, url, original_url, filename, destination, state, progress, size,
+                 downloaded, speed, eta,
+                 host, category, priority, segments, retry_count, created_at,
+                 started_at, completed_at, wait_until, error_message, batch_id, batch_name,
+                 tmdb_id, tmdb_title, tmdb_season, tmdb_episode, quality, resolution, arr_series_id, arr_movie_id,
+                 fshare_code
+                 FROM downloads
+                 WHERE (filename LIKE ?1 OR tmdb_title LIKE ?1 OR batch_name LIKE ?1)
+                   AND (filename LIKE ?2 OR (tmdb_season = ?3 AND tmdb_episode = ?4))
+                 ORDER BY CASE state WHEN 'COMPLETED' THEN 0 WHEN 'DOWNLOADING' THEN 1 WHEN 'STARTING' THEN 2 WHEN 'PAUSED' THEN 3 WHEN 'WAITING' THEN 4 WHEN 'QUEUED' THEN 5 ELSE 6 END,
+                          created_at DESC
+                 LIMIT 1"
+            )?;
+            let mut task_iter = stmt.query_map(params![title_like, episode_like, season, episode], |row| Self::parse_task_from_row(row))?;
+            match task_iter.next() {
+                Some(task) => Ok(Some(task?)),
+                None => Ok(None),
+            }
+        }).await.unwrap()
+    }
+
+    /// Find an existing task by final destination path (for duplicate/overwrite prevention)
+    /// Returns the task state and id if found, so callers can skip active/completed duplicates.
+    pub async fn find_task_by_destination_async(&self, destination: &str) -> Result<Option<(String, String)>> {
+        let pool = self.pool.clone();
+        let destination = destination.to_string();
+        tokio::task::spawn_blocking(move || {
+            let conn = pool.get().map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+            let result: Option<(String, String)> = conn.query_row(
+                "SELECT id, state FROM downloads WHERE destination = ?1 ORDER BY created_at DESC LIMIT 1",
+                params![&destination],
                 |row| Ok((row.get(0)?, row.get(1)?)),
             ).optional()?;
             Ok(result)
@@ -2657,23 +2731,23 @@ impl Db {
         Ok(AutoTrack {
             id: row.get(0)?, media_type: row.get(1)?, title: row.get(2)?, folder_url: row.get(3)?, folder_code: row.get(4)?, category: row.get(5)?,
             enabled: row.get::<_, i64>(6)? != 0, check_interval_secs: row.get(7)?, tmdb_id: row.get(8)?, year: row.get(9)?, season: row.get(10)?,
-            batch_id: row.get(11)?, batch_name: row.get(12)?, last_checked_at: row.get(13)?, last_error: row.get(14)?, created_at: row.get(15)?, updated_at: row.get(16)?,
+            batch_id: row.get(11)?, batch_name: row.get(12)?, poster_url: row.get(13)?, last_checked_at: row.get(14)?, last_error: row.get(15)?, created_at: row.get(16)?, updated_at: row.get(17)?,
         })
     }
     fn auto_track_item_from_row(row: &rusqlite::Row) -> rusqlite::Result<AutoTrackItem> {
         Ok(AutoTrackItem {
             id: row.get(0)?, track_id: row.get(1)?, fshare_code: row.get(2)?, file_name: row.get(3)?, file_url: row.get(4)?, file_size: row.get(5)?,
-            season: row.get(6)?, episode: row.get(7)?, status: row.get(8)?, download_id: row.get(9)?, first_seen_at: row.get(10)?, queued_at: row.get(11)?, completed_at: row.get(12)?, error_message: row.get(13)?,
+            season: row.get(6)?, episode: row.get(7)?, status: row.get(8)?, download_id: row.get(9)?, first_seen_at: row.get(10)?, queued_at: row.get(11)?, completed_at: row.get(12)?, error_message: row.get(13)?, auto_queued: row.get::<_, i64>(14).unwrap_or(0) != 0,
         })
     }
     pub async fn upsert_auto_track_async(&self, track: AutoTrack) -> Result<()> {
         let pool = self.pool.clone();
         tokio::task::spawn_blocking(move || {
             let conn = pool.get().map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
-            conn.execute("INSERT INTO auto_tracks (id,media_type,title,folder_url,folder_code,category,enabled,check_interval_secs,tmdb_id,year,season,batch_id,batch_name,last_checked_at,last_error,created_at,updated_at)
-                VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17)
-                ON CONFLICT(media_type, folder_code) DO UPDATE SET title=excluded.title, folder_url=excluded.folder_url, category=excluded.category, enabled=excluded.enabled, check_interval_secs=excluded.check_interval_secs, tmdb_id=excluded.tmdb_id, year=excluded.year, season=excluded.season, batch_id=excluded.batch_id, batch_name=excluded.batch_name, last_error=excluded.last_error, updated_at=excluded.updated_at",
-                params![track.id, track.media_type, track.title, track.folder_url, track.folder_code, track.category, if track.enabled {1} else {0}, track.check_interval_secs, track.tmdb_id, track.year, track.season, track.batch_id, track.batch_name, track.last_checked_at, track.last_error, track.created_at, track.updated_at])?;
+            conn.execute("INSERT INTO auto_tracks (id,media_type,title,folder_url,folder_code,category,enabled,check_interval_secs,tmdb_id,year,season,batch_id,batch_name,poster_url,last_checked_at,last_error,created_at,updated_at)
+                VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18)
+                ON CONFLICT(media_type, folder_code) DO UPDATE SET title=excluded.title, folder_url=excluded.folder_url, category=excluded.category, enabled=excluded.enabled, check_interval_secs=excluded.check_interval_secs, tmdb_id=excluded.tmdb_id, year=excluded.year, season=excluded.season, batch_id=excluded.batch_id, batch_name=excluded.batch_name, poster_url=COALESCE(excluded.poster_url, auto_tracks.poster_url), last_checked_at=excluded.last_checked_at, last_error=excluded.last_error, updated_at=excluded.updated_at",
+                params![track.id, track.media_type, track.title, track.folder_url, track.folder_code, track.category, if track.enabled {1} else {0}, track.check_interval_secs, track.tmdb_id, track.year, track.season, track.batch_id, track.batch_name, track.poster_url, track.last_checked_at, track.last_error, track.created_at, track.updated_at])?;
             Ok(())
         }).await.map_err(|_| rusqlite::Error::InvalidQuery)?
     }
@@ -2681,7 +2755,7 @@ impl Db {
         let pool = self.pool.clone();
         tokio::task::spawn_blocking(move || {
             let conn = pool.get().map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
-            let mut stmt = conn.prepare("SELECT id,media_type,title,folder_url,folder_code,category,enabled,check_interval_secs,tmdb_id,year,season,batch_id,batch_name,last_checked_at,last_error,created_at,updated_at FROM auto_tracks ORDER BY updated_at DESC")?;
+            let mut stmt = conn.prepare("SELECT id,media_type,title,folder_url,folder_code,category,enabled,check_interval_secs,tmdb_id,year,season,batch_id,batch_name,poster_url,last_checked_at,last_error,created_at,updated_at FROM auto_tracks ORDER BY updated_at DESC")?;
             let rows: Result<Vec<AutoTrack>> = stmt.query_map([], Self::auto_track_from_row)?.collect();
             rows
         }).await.map_err(|_| rusqlite::Error::InvalidQuery)?
@@ -2690,12 +2764,31 @@ impl Db {
         let pool = self.pool.clone();
         tokio::task::spawn_blocking(move || {
             let conn = pool.get().map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
-            conn.query_row("SELECT id,media_type,title,folder_url,folder_code,category,enabled,check_interval_secs,tmdb_id,year,season,batch_id,batch_name,last_checked_at,last_error,created_at,updated_at FROM auto_tracks WHERE id=?1", params![id], Self::auto_track_from_row).optional()
+            conn.query_row("SELECT id,media_type,title,folder_url,folder_code,category,enabled,check_interval_secs,tmdb_id,year,season,batch_id,batch_name,poster_url,last_checked_at,last_error,created_at,updated_at FROM auto_tracks WHERE id=?1", params![id], Self::auto_track_from_row).optional()
         }).await.map_err(|_| rusqlite::Error::InvalidQuery)?
     }
-    pub async fn set_auto_track_enabled_async(&self, id: String, enabled: bool) -> Result<()> {
+    pub async fn get_auto_track_by_folder_async(&self, media_type: String, folder_code: String) -> Result<Option<AutoTrack>> {
         let pool = self.pool.clone();
-        tokio::task::spawn_blocking(move || { let conn = pool.get().map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?; conn.execute("UPDATE auto_tracks SET enabled=?2, updated_at=datetime('now') WHERE id=?1", params![id, if enabled {1} else {0}])?; Ok(()) }).await.map_err(|_| rusqlite::Error::InvalidQuery)?
+        tokio::task::spawn_blocking(move || {
+            let conn = pool.get().map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+            conn.query_row("SELECT id,media_type,title,folder_url,folder_code,category,enabled,check_interval_secs,tmdb_id,year,season,batch_id,batch_name,poster_url,last_checked_at,last_error,created_at,updated_at FROM auto_tracks WHERE media_type=?1 AND folder_code=?2", params![media_type, folder_code], Self::auto_track_from_row).optional()
+        }).await.map_err(|_| rusqlite::Error::InvalidQuery)?
+    }
+    pub async fn set_auto_track_enabled_async(&self, id: String, enabled: bool) -> Result<bool> {
+        let pool = self.pool.clone();
+        tokio::task::spawn_blocking(move || {
+            let conn = pool.get().map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+            let rows = conn.execute("UPDATE auto_tracks SET enabled=?2, updated_at=datetime('now') WHERE id=?1", params![id, if enabled {1} else {0}])?;
+            Ok(rows > 0)
+        }).await.map_err(|_| rusqlite::Error::InvalidQuery)?
+    }
+    pub async fn update_all_auto_track_intervals_async(&self, check_interval_secs: i64) -> Result<()> {
+        let pool = self.pool.clone();
+        tokio::task::spawn_blocking(move || {
+            let conn = pool.get().map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+            conn.execute("UPDATE auto_tracks SET check_interval_secs=?1, updated_at=datetime('now')", params![check_interval_secs])?;
+            Ok(())
+        }).await.map_err(|_| rusqlite::Error::InvalidQuery)?
     }
     pub async fn delete_auto_track_async(&self, id: String) -> Result<()> {
         let pool = self.pool.clone();
@@ -2705,7 +2798,7 @@ impl Db {
         let pool = self.pool.clone();
         tokio::task::spawn_blocking(move || {
             let conn = pool.get().map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
-            let mut stmt = conn.prepare("SELECT id,media_type,title,folder_url,folder_code,category,enabled,check_interval_secs,tmdb_id,year,season,batch_id,batch_name,last_checked_at,last_error,created_at,updated_at FROM auto_tracks WHERE enabled=1 AND (last_checked_at IS NULL OR strftime('%s','now') - strftime('%s', last_checked_at) >= check_interval_secs) ORDER BY COALESCE(last_checked_at, '') ASC")?;
+            let mut stmt = conn.prepare("SELECT id,media_type,title,folder_url,folder_code,category,enabled,check_interval_secs,tmdb_id,year,season,batch_id,batch_name,poster_url,last_checked_at,last_error,created_at,updated_at FROM auto_tracks WHERE enabled=1 AND (last_checked_at IS NULL OR date(last_checked_at) < date('now') OR strftime('%s','now') - strftime('%s', last_checked_at) >= check_interval_secs) ORDER BY COALESCE(last_checked_at, '') ASC")?;
             let rows: Result<Vec<AutoTrack>> = stmt.query_map([], Self::auto_track_from_row)?.collect();
             rows
         }).await.map_err(|_| rusqlite::Error::InvalidQuery)?
@@ -2716,19 +2809,31 @@ impl Db {
     }
     pub async fn upsert_auto_track_item_async(&self, item: AutoTrackItem) -> Result<()> {
         let pool = self.pool.clone();
-        tokio::task::spawn_blocking(move || { let conn = pool.get().map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?; conn.execute("INSERT OR REPLACE INTO auto_track_items (id,track_id,fshare_code,file_name,file_url,file_size,season,episode,status,download_id,first_seen_at,queued_at,completed_at,error_message) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14)", params![item.id,item.track_id,item.fshare_code,item.file_name,item.file_url,item.file_size,item.season,item.episode,item.status,item.download_id,item.first_seen_at,item.queued_at,item.completed_at,item.error_message])?; Ok(()) }).await.map_err(|_| rusqlite::Error::InvalidQuery)?
+        tokio::task::spawn_blocking(move || { let conn = pool.get().map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?; conn.execute("INSERT OR REPLACE INTO auto_track_items (id,track_id,fshare_code,file_name,file_url,file_size,season,episode,status,download_id,first_seen_at,queued_at,completed_at,error_message,auto_queued) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15)", params![item.id,item.track_id,item.fshare_code,item.file_name,item.file_url,item.file_size,item.season,item.episode,item.status,item.download_id,item.first_seen_at,item.queued_at,item.completed_at,item.error_message, if item.auto_queued { 1 } else { 0 }])?; Ok(()) }).await.map_err(|_| rusqlite::Error::InvalidQuery)?
     }
     pub async fn get_auto_track_item_by_code_async(&self, track_id: String, fshare_code: String) -> Result<Option<AutoTrackItem>> {
         let pool = self.pool.clone();
-        tokio::task::spawn_blocking(move || { let conn = pool.get().map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?; conn.query_row("SELECT id,track_id,fshare_code,file_name,file_url,file_size,season,episode,status,download_id,first_seen_at,queued_at,completed_at,error_message FROM auto_track_items WHERE track_id=?1 AND fshare_code=?2", params![track_id, fshare_code], Self::auto_track_item_from_row).optional() }).await.map_err(|_| rusqlite::Error::InvalidQuery)?
+        tokio::task::spawn_blocking(move || { let conn = pool.get().map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?; conn.query_row("SELECT id,track_id,fshare_code,file_name,file_url,file_size,season,episode,status,download_id,first_seen_at,queued_at,completed_at,error_message,auto_queued FROM auto_track_items WHERE track_id=?1 AND fshare_code=?2", params![track_id, fshare_code], Self::auto_track_item_from_row).optional() }).await.map_err(|_| rusqlite::Error::InvalidQuery)?
     }
     pub async fn list_auto_track_items_async(&self, track_id: String) -> Result<Vec<AutoTrackItem>> {
         let pool = self.pool.clone();
         tokio::task::spawn_blocking(move || {
             let conn = pool.get().map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
-            let mut stmt = conn.prepare("SELECT id,track_id,fshare_code,file_name,file_url,file_size,season,episode,status,download_id,first_seen_at,queued_at,completed_at,error_message FROM auto_track_items WHERE track_id=?1 ORDER BY COALESCE(season,0), COALESCE(episode,0), file_name")?;
+            let mut stmt = conn.prepare("SELECT id,track_id,fshare_code,file_name,file_url,file_size,season,episode,status,download_id,first_seen_at,queued_at,completed_at,error_message,auto_queued FROM auto_track_items WHERE track_id=?1 ORDER BY COALESCE(season,0), COALESCE(episode,0), file_name")?;
             let rows: Result<Vec<AutoTrackItem>> = stmt.query_map(params![track_id], Self::auto_track_item_from_row)?.collect();
             rows
+        }).await.map_err(|_| rusqlite::Error::InvalidQuery)?
+    }
+
+    pub async fn update_auto_track_item_sync_state_async(&self, id: String, status: String, download_id: Option<String>, queued_at: Option<String>, completed_at: Option<String>, error_message: Option<String>) -> Result<()> {
+        let pool = self.pool.clone();
+        tokio::task::spawn_blocking(move || {
+            let conn = pool.get().map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+            conn.execute(
+                "UPDATE auto_track_items SET status=?1, download_id=?2, queued_at=?3, completed_at=?4, error_message=?5 WHERE id=?6",
+                params![status, download_id, queued_at, completed_at, error_message, id],
+            )?;
+            Ok(())
         }).await.map_err(|_| rusqlite::Error::InvalidQuery)?
     }
 }

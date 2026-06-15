@@ -8,6 +8,8 @@
     title?: string;
     batch_name?: string;
     tmdb_title?: string;
+    season?: number;
+    episode?: number;
     tmdb_id?: number | string;
     media_type?: string;
     category?: string;
@@ -36,6 +38,9 @@
   type QueueItem = {
     id: string;
     title: string;
+    filename?: string;
+    displayTitle?: string;
+    episodeLabel?: string;
     owner: string;
     size: string;
     speed: string;
@@ -51,6 +56,8 @@
     outputPath?: string;
     viTitle?: string;
     runtime?: number;
+    season?: number;
+    episode?: number;
   };
 
   type PreviewItem = {
@@ -533,7 +540,13 @@
   }
 
   function normalizeDownload(task: ApiDownload, index: number, previousBanners = new Map<string, string>(), previousDetails = new Map<string, { viTitle?: string; runtime?: number }>()): QueueItem {
-    const title = task.tmdb_title || task.title || task.filename || task.name || task.batch_name || task.url || "FHUB Download";
+    const filename = task.filename || task.name || "";
+    const baseTitle = task.tmdb_title || task.batch_name || task.title || filename || task.url || "FHUB Download";
+    const parsedEpisode = parseEpisodeMeta(filename || baseTitle);
+    const season = Number(task.season || parsedEpisode.season || 0) || undefined;
+    const episode = Number(task.episode || parsedEpisode.episode || 0) || undefined;
+    const episodeLabel = episodeDisplayLabel(season, episode, filename || baseTitle);
+    const title = baseTitle;
     const id = String(task.id ?? task.url ?? `${title}-${index}`);
     const state = normalizeState(task.state || task.status);
     const mediaType = normalizeMediaType(task.media_type || task.category);
@@ -544,6 +557,9 @@
     return {
       id,
       title,
+      filename,
+      displayTitle: episodeLabel ? `${title} · ${episodeLabel}` : title,
+      episodeLabel,
       owner: task.owner || "FHUB",
       size: formatDownloadSize(task),
       speed: typeof task.speed === "string" ? task.speed : `${formatBytes(task.speed)}/s`,
@@ -559,7 +575,25 @@
       outputPath: task.output_path || task.file_path || task.save_path,
       viTitle: cachedDetail?.viTitle || previousDetail?.viTitle,
       runtime: cachedDetail?.runtime || previousDetail?.runtime,
+      season,
+      episode,
     };
+  }
+
+  function parseEpisodeMeta(text: string) {
+    const value = String(text || "");
+    const sxex = value.match(/S(\d{1,2})\s*E(\d{1,3})/i) || value.match(/(?:season|ss)[\s._-]*(\d{1,2}).*?(?:episode|ep|e)[\s._-]*(\d{1,3})/i);
+    if (sxex) return { season: Number(sxex[1]), episode: Number(sxex[2]) };
+    const ep = value.match(/(?:tập|tap|episode|ep)[\s._:-]*(\d{1,3})/i) || value.match(/[\s._-]E(\d{1,3})(?:[\s._-]|$)/i);
+    return { season: undefined, episode: ep ? Number(ep[1]) : undefined };
+  }
+
+  function episodeDisplayLabel(season?: number, episode?: number, text = "") {
+    const fromText = String(text || "").match(/S\d{1,2}\s*E\d{1,3}/i)?.[0]?.replace(/\s+/g, "").toUpperCase();
+    if (season && episode) return `S${String(season).padStart(2, "0")}E${String(episode).padStart(2, "0")}`;
+    if (fromText) return fromText;
+    if (episode) return `Tập ${episode}`;
+    return "";
   }
 
   function stateLabel(state: QueueItem["state"]) {
@@ -896,7 +930,7 @@
             {#if item.state !== "completed"}<small>{Math.round(item.progress)}%</small>{/if}
           </div>
           <div class="download-info">
-            <div class="title-row"><strong title={item.title}>{item.title}</strong></div>
+            <div class="title-row"><strong title={item.filename || item.title}>{item.displayTitle || item.title}</strong></div>
             <div class="download-meta">
               <span class="state-pill {item.state}"><span class="material-icons">{stateIcon(item.state)}</span>{stateLabel(item.state)}</span>
               {#if item.state === "completed"}

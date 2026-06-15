@@ -1035,6 +1035,7 @@
       selectedDownloadUrls = selectedLinks.map((link) => link.url || "").filter(Boolean);
       discoveryAutoTrackEnabled = false;
       discoveryAutoTrackId = null;
+      await syncDiscoveryAutoTrackState();
       seriesMode = selectedLinks.length > 1 || selectedFilm?.type === "TV";
       const removed = rawLinks.length - selectedLinks.length;
       message = selectedLinks.length
@@ -1099,6 +1100,32 @@
     selectedDownloadUrls = [];
   }
 
+  function folderCodeFromUrl(url?: string) {
+    return String(url || "").split("/folder/")[1]?.split(/[?&/]/)[0] || "";
+  }
+
+  async function syncDiscoveryAutoTrackState() {
+    const folderLink = selectedSourceFolderLink || selectedLinks.find((link) => link.url && /fshare\.vn\/folder\//i.test(link.url));
+    const folderCode = folderCodeFromUrl(folderLink?.url);
+    if (!folderCode) {
+      discoveryAutoTrackEnabled = false;
+      discoveryAutoTrackId = null;
+      return;
+    }
+    try {
+      const res = await fetch("/api/auto-track", { credentials: "include" });
+      if (!res.ok) return;
+      const tracks = await res.json();
+      const existing = Array.isArray(tracks)
+        ? tracks.find((track) => String(track.media_type || "tv").toLowerCase() === "tv" && String(track.folder_code || "") === folderCode)
+        : null;
+      discoveryAutoTrackId = existing?.id || null;
+      discoveryAutoTrackEnabled = !!existing?.enabled;
+    } catch {
+      // Keep current button state if auth/network temporarily fails.
+    }
+  }
+
   async function toggleAutoTrackFromDiscovery() {
     if (discoveryAutoTrackEnabled && discoveryAutoTrackId) {
       discoveryAutoTrackLoading = true;
@@ -1133,7 +1160,7 @@
     }
     discoveryAutoTrackLoading = true;
     try {
-      const folderCode = firstLink.fcode || firstLink.url.split("/folder/")[1]?.split(/[?&/]/)[0] || "";
+      const folderCode = firstLink.fcode || folderCodeFromUrl(firstLink.url);
       const response = await fetch("/api/auto-track", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1147,14 +1174,17 @@
           tmdb_id: selectedFilm?.id,
           year: selectedFilm?.year ? Number(selectedFilm.year) || undefined : undefined,
           batch_name: selectedFilm?.title || firstLink.name || "Auto Track series",
+          poster_url: selectedFilm?.img || selectedFilm?.heroImg,
           check_now: false,
         }),
       });
       if (!response.ok) throw new Error(await response.text());
       const track = await response.json();
       discoveryAutoTrackId = track?.id || null;
-      discoveryAutoTrackEnabled = true;
-      message = "Đã bật Auto Track cho phim bộ này. Muốn tải ngay vẫn bấm Download và xác nhận như bình thường.";
+      discoveryAutoTrackEnabled = !!track?.enabled;
+      message = discoveryAutoTrackEnabled
+        ? "Đã bật Auto Track cho phim bộ này. Muốn tải ngay vẫn bấm Download và xác nhận như bình thường."
+        : "Auto Track của phim bộ này đang tắt.";
     } catch (error) {
       message = error instanceof Error ? error.message : "Bật Auto Track thất bại.";
     } finally {

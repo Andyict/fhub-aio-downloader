@@ -376,8 +376,9 @@ async fn main() {
     // Spawn auto-track background watcher. Checks due TV folders every minute;
     // each track's own interval defaults to 1 hour.
     tokio::spawn(async move {
+        tracing::info!("Auto-track background watcher started");
+        auto_track_service.check_due_tracks().await;
         let mut interval = tokio::time::interval(Duration::from_secs(60));
-        interval.tick().await;
         loop {
             interval.tick().await;
             auto_track_service.check_due_tracks().await;
