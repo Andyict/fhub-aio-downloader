@@ -309,17 +309,19 @@
   }
 
   async function runWebUpdate() {
+    if (updatingApp) return;
+    updateMessage = "Đang chuẩn bị cập nhật FHub...";
     if (!updateStatus?.updater_available) {
       updateMessage = "Chưa bật quyền update trong web. Cần mount /var/run/docker.sock vào container FHub rồi restart một lần.";
       return;
     }
-    showUpdateConfirm = true;
+    await confirmWebUpdate();
   }
 
   async function confirmWebUpdate() {
     showUpdateConfirm = false;
     updatingApp = true;
-    updateMessage = "Đang cập nhật FHub...";
+    updateMessage = "Đang cập nhật FHub... Vui lòng chờ, ứng dụng sẽ tự khởi động lại.";
     try {
       const response = await fetch("/api/update/run", { method: "POST", credentials: "include" });
       const result = response.ok ? await response.json() : { success: false, message: await response.text() };
@@ -616,29 +618,6 @@
       <article class="panel wide">{@render ActivityPanel()}</article>
     {/if}
   </section>
-
-  {#if showUpdateConfirm}
-    <div class="update-modal-backdrop" role="presentation" onclick={(event) => { if (event.target === event.currentTarget) showUpdateConfirm = false; }}>
-      <section class="update-modal" role="dialog" aria-modal="true" aria-labelledby="update-confirm-title">
-        <div class="update-modal-glow glow-one"></div>
-        <div class="update-modal-glow glow-two"></div>
-        <button type="button" class="update-modal-close" aria-label="Đóng" onclick={() => showUpdateConfirm = false} disabled={updatingApp}>
-          <span class="material-icons">close</span>
-        </button>
-        <div class="update-modal-head compact">
-          <div class="update-modal-mark"><span class="material-icons">system_update_alt</span></div>
-          <h2 id="update-confirm-title">Cập nhật FHub?</h2>
-          <p>Ứng dụng sẽ tự cập nhật và khởi động lại. Dữ liệu hiện có vẫn được giữ nguyên.</p>
-        </div>
-        <div class="update-modal-actions simple">
-          <button type="button" class="update-cancel-button" onclick={() => showUpdateConfirm = false} disabled={updatingApp}>Hủy</button>
-          <button type="button" class="update-confirm-button" onclick={confirmWebUpdate} disabled={updatingApp}>
-            <span>{updatingApp ? "Đang update..." : "Update"}</span>
-          </button>
-        </div>
-      </section>
-    </div>
-  {/if}
 
   {#if activeTab === "overview"}
     <a class="settings-mobile-signout" href="/login" aria-label={t.signOut}>
