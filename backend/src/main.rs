@@ -28,7 +28,9 @@ mod services;
 mod fhub_source;
 
 
-use std::sync::Arc;
+use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+
+static HELPER_UPDATE_RUNNING: AtomicBool = AtomicBool::new(false);
 
 /// Cached FHUB metadata enrichment stored by tmdb_id.
 /// Holds everything the source pipeline needs without re-calling metadata APIs.
@@ -89,6 +91,15 @@ async fn updater_health() -> Json<HealthResponse> {
 }
 
 async fn updater_run(Json(payload): Json<UpdaterRequest>) -> Result<Json<api::update::UpdateRunResponse>, axum::http::StatusCode> {
+    if HELPER_UPDATE_RUNNING.swap(true, Ordering::SeqCst) {
+        tracing::warn!("Updater helper ignored duplicate update request while one is already running");
+        return Ok(Json(api::update::UpdateRunResponse {
+            success: true,
+            message: "FHub đang cập nhật, vui lòng chờ.".to_string(),
+            logs: vec!["Updater helper already running".to_string()],
+        }));
+    }
+
     let image = payload.image
         .or_else(|| std::env::var("FHUB_UPDATE_IMAGE").ok())
         .unwrap_or_else(|| "ghcr.io/andyict/fhub-aio:latest".to_string());
@@ -106,6 +117,7 @@ async fn updater_run(Json(payload): Json<UpdaterRequest>) -> Result<Json<api::up
             Ok(result) => tracing::info!(success = result.success, message = %result.message, "Detached FHUB update finished"),
             Err(status) => tracing::error!(?status, "Detached FHUB update failed before producing a response"),
         }
+        HELPER_UPDATE_RUNNING.store(false, Ordering::SeqCst);
     });
 
     Ok(Json(api::update::UpdateRunResponse {
