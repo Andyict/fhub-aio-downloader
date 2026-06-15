@@ -4,6 +4,17 @@
 
 FHub là trình quản lý tải FShare dành cho NAS, có giao diện web, hỗ trợ tải nhiều luồng, quản lý tài khoản FShare và lưu file tải về theo thư mục media trên NAS.
 
+## Tính năng chính
+
+- **Tải FShare tối ưu cho NAS**: tải nhiều luồng, chia segment/file, queue nền và theo dõi tốc độ.
+- **Check link trước khi tải**: xem danh sách file trong folder FShare, chọn file cần tải rồi mới xác nhận.
+- **3 chế độ tải**: **Phim lẻ**, **Phim bộ**, và **Auto Track** ngay trong khu vực Download mode.
+- **Auto Track phim bộ**: theo dõi folder FShare, ghi nhận các tập hiện có làm baseline và chỉ tự tải tập mới xuất hiện sau này.
+- **Quản lý tải xuống**: pause/resume, retry, trạng thái rõ ràng và chỉ báo hoàn tất khi file thật sự tồn tại trên ổ.
+- **Cập nhật trong web**: Settings hiển thị bản mới, có popup xác nhận, popup đang update và tự làm mới sau 1 phút.
+- **Cài một file Compose**: chỉ cần một `docker-compose.yml`; helper update được FHub tạo tạm khi cần, không phải khai báo service riêng.
+- **Giao diện Việt/Anh**: các trạng thái chính được dịch theo ngôn ngữ web.
+
 ## Cài nhanh bằng một file `docker-compose.yml`
 
 Cách này dùng image public đã build sẵn từ GHCR. Người dùng chỉ cần Docker và Docker Compose; không cần build source.
@@ -33,8 +44,6 @@ Lần đầu mở FHub, bạn sẽ tạo tài khoản admin đầu tiên.
 ## File `docker-compose.yml` mẫu
 
 ```yaml
-version: '3.8'
-
 services:
   fhub:
     image: ghcr.io/andyict/fhub-aio:latest
@@ -67,6 +76,13 @@ services:
       - RUST_LOG=fhub=info,tower_http=info
       - FHUB_CONTAINER_NAME=fhub
       - FHUB_UPDATE_IMAGE=ghcr.io/andyict/fhub-aio:latest
+
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8484/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
 volumes:
   fhub_appdata:
@@ -104,7 +120,7 @@ docker compose up -d
 
 ### Cập nhật bằng nút trong web
 
-Trong **Settings**, FHub tự kiểm tra GitHub/GHCR. Nếu có commit/image mới, web sẽ hiện nút **Update**.
+Trong **Settings**, FHub tự kiểm tra GitHub/GHCR. Nếu có commit/image mới, web sẽ hiện nút **Update**. Khi bấm Update, FHub sẽ mở popup xác nhận; sau khi xác nhận, popup chuyển sang trạng thái đang cập nhật và trang tự làm mới sau khoảng 1 phút.
 
 FHub được cài bằng một service trong `docker-compose.yml`. Bạn **không cần** khai báo thêm service updater riêng. Khi cập nhật qua web, FHub có thể tự tạo một helper container tạm từ chính image FHub để pull/recreate container chính an toàn và healthcheck/rollback nếu lỗi.
 
@@ -135,8 +151,8 @@ Dùng `docker-compose.auto-update.yml` nếu bạn muốn FHub tự kiểm tra i
 
 Với link folder FShare phim bộ, FHub có thể lưu Auto Track để theo dõi tập mới:
 
-- Bật/tắt Auto Track bằng nút cạnh Download.
-- Bật Auto Track chỉ lưu folder theo dõi, không tự tải ngay các file đang chọn.
+- Chọn tab **Auto Track** trong Download mode hoặc bật từ Discovery/Auto Track.
+- Bật Auto Track chỉ lưu folder theo dõi, không tự tải ngay các file đang chọn/tập hiện có.
 - Muốn tải ngay vẫn bấm **Download** và xác nhận như bình thường.
 - Chu kỳ quét được chỉnh trong **Settings → Auto Track**.
 - Khi folder có tập mới ở lần quét sau, FHub tự thêm tập mới vào queue và tránh tải trùng tập đã ghi nhận.

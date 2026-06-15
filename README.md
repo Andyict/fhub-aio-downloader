@@ -4,6 +4,17 @@ English | [Tiếng Việt](README.vi.md)
 
 FHub is a NAS-focused FShare download manager with a web dashboard, segmented downloads, FShare account support, and media-friendly download organization.
 
+## Features
+
+- **NAS-friendly FShare downloads**: concurrent slots, segmented file downloads, background queue, and speed tracking.
+- **Preview before downloading**: inspect FShare folders, select files, then confirm before adding them to the queue.
+- **3 download modes**: **Movie**, **Series**, and **Auto Track** directly in the Download mode selector.
+- **TV Auto Track**: watch FShare series folders, baseline existing episodes, and only auto-download genuinely new episodes later.
+- **Download management**: pause/resume, retry, clear states, and completed status only when the actual file exists on disk.
+- **Web updater**: Settings shows available updates with a confirmation popup, an in-progress popup, and automatic refresh after 1 minute.
+- **Single-file Compose install**: one `docker-compose.yml`; FHub creates a temporary helper container only during web updates.
+- **Vietnamese/English UI**: core states and actions follow the selected web language.
+
 ## Quick install with one `docker-compose.yml`
 
 This method uses the public prebuilt GHCR image. Users only need Docker and Docker Compose; no source build is required.
@@ -33,8 +44,6 @@ On first launch, create the first admin account.
 ## `docker-compose.yml`
 
 ```yaml
-version: '3.8'
-
 services:
   fhub:
     image: ghcr.io/andyict/fhub-aio:latest
@@ -67,6 +76,13 @@ services:
       - RUST_LOG=fhub=info,tower_http=info
       - FHUB_CONTAINER_NAME=fhub
       - FHUB_UPDATE_IMAGE=ghcr.io/andyict/fhub-aio:latest
+
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8484/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
 volumes:
   fhub_appdata:
@@ -104,7 +120,7 @@ docker compose up -d
 
 ### Web update notice
 
-In **Settings**, FHub checks GitHub/GHCR for a newer image. When one is available, the web UI can update the running container.
+In **Settings**, FHub checks GitHub/GHCR for a newer image. When one is available, the web UI can update the running container. Pressing Update opens a confirmation popup; after confirmation, the popup switches to an updating state and the page refreshes automatically after about 1 minute.
 
 FHub intentionally installs from a single `docker-compose.yml` service. You do **not** need to define a separate updater service in Compose. During a web update, FHub may create a short-lived helper container from the same FHub image so the main `fhub` container can be safely pulled/recreated and health-checked.
 
@@ -129,8 +145,8 @@ Use `docker-compose.auto-update.yml` if you want FHub to check for new images au
 
 For FShare TV-series folders, FHub can save an Auto Track bookmark and watch for new episodes:
 
-- Toggle Auto Track next to the Download button.
-- Enabling Auto Track only saves the folder; it does not immediately download the currently selected files.
+- Select the **Auto Track** tab in Download mode, or enable it from Discovery/Auto Track.
+- Enabling Auto Track only saves the folder; it does not immediately download selected files or existing episodes.
 - To download selected files now, still press **Download** and confirm as usual.
 - Configure the scan interval in **Settings → Auto Track**.
 - On later scans, new files are queued automatically while already-seen episodes are skipped.
