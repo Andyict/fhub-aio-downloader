@@ -56,8 +56,8 @@ services:
     volumes:
       - fhub_appdata:/appData
 
-      # Downloaded videos/files are saved here.
-      # Change only /volume1/Video to your NAS folder; keep /downloads unchanged.
+      # Change only /volume1/Video to your NAS video folder; keep /downloads unchanged.
+      # FHub automatically saves movies to Movies and shows to Shows inside this folder.
       - /volume1/Video:/downloads
 
       # Allows the in-app Update button to pull/recreate FHub.
@@ -101,6 +101,14 @@ Downloaded videos/files are saved here:
 ```
 
 Create this folder first if it does not exist. Change only `/volume1/Video` to your real NAS folder. Keep `/downloads` unchanged.
+
+By default, FHub automatically splits download destinations inside this folder:
+
+- Movies: `/volume1/Video/Movies`
+- Shows/series: `/volume1/Video/Shows`
+- Unknown file type: `/volume1/Video`
+
+You do not need to mount `Movies` or `Shows` separately. If these folders do not exist yet, FHub/Docker will create them when the matching download starts.
 
 ## Updating
 

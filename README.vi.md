@@ -56,8 +56,8 @@ services:
     volumes:
       - fhub_appdata:/appData
 
-      # Video/file tải về sẽ được lưu ở đây.
-      # Chỉ đổi /volume1/Video thành thư mục trên NAS của bạn; giữ nguyên /downloads.
+      # Chỉ đổi /volume1/Video thành thư mục video trên NAS của bạn; giữ nguyên /downloads.
+      # FHub tự lưu phim lẻ vào Movies và phim bộ vào Shows bên trong thư mục này.
       - /volume1/Video:/downloads
 
       # Cho phép nút Update trong web tự pull/recreate container FHub.
@@ -101,6 +101,14 @@ Dòng này là nơi lưu video/file tải từ FShare:
 ```
 
 Nếu thư mục này chưa có thì nên tạo trước. Nếu muốn đổi thư mục, chỉ sửa `/volume1/Video` thành thư mục thật trên NAS. Giữ nguyên `/downloads`.
+
+Theo mặc định, FHub tự phân loại đường dẫn tải về bên trong thư mục này:
+
+- Phim lẻ: `/volume1/Video/Movies`
+- Phim bộ/series: `/volume1/Video/Shows`
+- File chưa xác định rõ loại: `/volume1/Video`
+
+Bạn không cần mount riêng `Movies` hoặc `Shows`. Nếu hai thư mục này chưa có, FHub/Docker sẽ tạo khi có lượt tải tương ứng.
 
 ## Cập nhật
 

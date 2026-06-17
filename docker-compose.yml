@@ -10,10 +10,8 @@ services:
     volumes:
       - fhub_appdata:/appData
 
-      # Local-only split library: Movies = film lẻ, Shows = film bộ.
-      - /volume1/Video/Movies:/movies
-      - /volume1/Video/Shows:/shows
-      # Fallback cho mục không xác định rõ loại.
+      # Chỉ đổi /volume1/Video thành thư mục video trên NAS của bạn; giữ nguyên /downloads.
+      # FHub sẽ tự lưu phim lẻ vào /downloads/Movies và phim bộ vào /downloads/Shows.
       - /volume1/Video:/downloads
 
       # Cho phép nút Update trong web tự pull/recreate container FHub (không cần container updater riêng).
@@ -26,8 +24,6 @@ services:
       - TZ=Asia/Ho_Chi_Minh
       - FHUB_APPDATA_DIR=/appData
       - FHUB_DOWNLOADS_DIR=/downloads
-      - FHUB_MOVIES_DIR=/movies
-      - FHUB_SHOWS_DIR=/shows
       - FHUB_SEGMENTS_PER_DOWNLOAD=16
       - FHUB_MAX_CONCURRENT=4
       - RUST_LOG=fhub=info,tower_http=info

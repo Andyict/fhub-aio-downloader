@@ -12,8 +12,6 @@ services:
 
     volumes:
       - fhub_dev_8686_appdata:/appData
-      - /volume1/Video/Movies:/movies
-      - /volume1/Video/Shows:/shows
       - /volume1/Video:/downloads
       - /var/run/docker.sock:/var/run/docker.sock
 
@@ -24,8 +22,6 @@ services:
       - TZ=Asia/Ho_Chi_Minh
       - FHUB_APPDATA_DIR=/appData
       - FHUB_DOWNLOADS_DIR=/downloads
-      - FHUB_MOVIES_DIR=/movies
-      - FHUB_SHOWS_DIR=/shows
       - FHUB_SEGMENTS_PER_DOWNLOAD=16
       - FHUB_MAX_CONCURRENT=4
       - RUST_LOG=fhub=info,tower_http=info
