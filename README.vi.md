@@ -106,7 +106,7 @@ Theo mặc định, FHub tự phân loại đường dẫn tải về bên trong
 
 - Phim lẻ: `/volume1/Video/Movies`
 - Phim bộ/series: `/volume1/Video/Shows`
-- File chưa xác định rõ loại: `/volume1/Video`
+- Video/file chưa xác định rõ loại: `/volume1/Video/Movies`
 
 Bạn không cần mount riêng `Movies` hoặc `Shows`. Nếu hai thư mục này chưa có, FHub/Docker sẽ tạo khi có lượt tải tương ứng.
 

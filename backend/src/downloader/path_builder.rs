@@ -104,8 +104,8 @@ impl PathBuilder {
                         .to_string()
                 }
                 _ => {
-                    // Default: just use root dir
-                    root_dir.join(filename).to_string_lossy().to_string()
+                    // Unknown media type defaults to Movies for single/standalone videos.
+                    movies_root.join(filename).to_string_lossy().to_string()
                 }
             }
         } else {
@@ -113,7 +113,7 @@ impl PathBuilder {
             let base_dir = match category {
                 "movie" | "movies" => movies_root.as_path(),
                 "tv" | "show" | "shows" | "series" => shows_root.as_path(),
-                _ => root_dir,
+                _ => movies_root.as_path(),
             };
             base_dir.join(filename).to_string_lossy().to_string()
         }

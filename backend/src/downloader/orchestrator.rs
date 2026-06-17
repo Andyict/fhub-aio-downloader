@@ -383,7 +383,11 @@ impl DownloadOrchestrator {
                 .filter(|v| !v.trim().is_empty())
                 .map(PathBuf::from)
                 .unwrap_or_else(|| download_dir.join("Movies")),
-            _ => download_dir.clone(),
+            _ => std::env::var("FHUB_MOVIES_DIR")
+                .ok()
+                .filter(|v| !v.trim().is_empty())
+                .map(PathBuf::from)
+                .unwrap_or_else(|| download_dir.join("Movies")),
         };
 
         // Build destination with FHub-compatible filename.

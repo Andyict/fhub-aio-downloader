@@ -106,7 +106,7 @@ By default, FHub automatically splits download destinations inside this folder:
 
 - Movies: `/volume1/Video/Movies`
 - Shows/series: `/volume1/Video/Shows`
-- Unknown file type: `/volume1/Video`
+- Unknown video/file type: `/volume1/Video/Movies`
 
 You do not need to mount `Movies` or `Shows` separately. If these folders do not exist yet, FHub/Docker will create them when the matching download starts.
 
