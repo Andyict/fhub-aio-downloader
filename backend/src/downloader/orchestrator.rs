@@ -372,6 +372,19 @@ impl DownloadOrchestrator {
             None
         };
         let manual_folder_name = folder_name.or(inferred_series_folder);
+        let routed_download_dir = match category.as_str() {
+            "tv" | "show" | "shows" | "series" => std::env::var("FHUB_SHOWS_DIR")
+                .ok()
+                .filter(|v| !v.trim().is_empty())
+                .map(PathBuf::from)
+                .unwrap_or_else(|| download_dir.clone()),
+            "movie" | "movies" => std::env::var("FHUB_MOVIES_DIR")
+                .ok()
+                .filter(|v| !v.trim().is_empty())
+                .map(PathBuf::from)
+                .unwrap_or_else(|| download_dir.clone()),
+            _ => download_dir.clone(),
+        };
 
         // Build destination with FHub-compatible filename.
         // Manual series mode uses folder_name when TMDB metadata is not available,
@@ -380,7 +393,7 @@ impl DownloadOrchestrator {
             if let Some(ref folder) = manual_folder_name {
                 let clean_folder = PathBuilder::sanitize_filename(folder);
                 if !clean_folder.is_empty() {
-                    download_dir.join(clean_folder).join(&final_filename).to_string_lossy().to_string()
+                    routed_download_dir.join(clean_folder).join(&final_filename).to_string_lossy().to_string()
                 } else {
                     self.build_destination_path(&final_filename, &category, &tmdb_metadata, &download_dir)
                 }

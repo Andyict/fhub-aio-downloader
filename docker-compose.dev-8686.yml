@@ -1,26 +1,24 @@
 services:
-  fhub:
-    image: ghcr.io/andyict/fhub-aio:latest
-    container_name: fhub
+  fhub-dev-8686:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: fhub:dev-8686
+    container_name: fhub-dev-8686
     restart: unless-stopped
 
     ports:
-      - "8584:8484"
+      - "8686:8484"
 
     volumes:
-      - fhub_appdata:/appData
-
-      # Local-only split library: Movies = film lẻ, Shows = film bộ.
+      - fhub_dev_8686_appdata:/appData
       - /volume1/Video/Movies:/movies
       - /volume1/Video/Shows:/shows
-      # Fallback cho mục không xác định rõ loại.
       - /volume1/Video:/downloads
-
-      # Cho phép nút Update trong web tự pull/recreate container FHub (không cần container updater riêng).
       - /var/run/docker.sock:/var/run/docker.sock
 
     networks:
-      - fhub_net
+      - fhub_dev_8686_net
 
     environment:
       - TZ=Asia/Ho_Chi_Minh
@@ -31,7 +29,7 @@ services:
       - FHUB_SEGMENTS_PER_DOWNLOAD=16
       - FHUB_MAX_CONCURRENT=4
       - RUST_LOG=fhub=info,tower_http=info
-      - FHUB_CONTAINER_NAME=fhub
+      - FHUB_CONTAINER_NAME=fhub-dev-8686
       - FHUB_UPDATE_IMAGE=ghcr.io/andyict/fhub-aio:latest
 
     healthcheck:
@@ -42,8 +40,8 @@ services:
       start_period: 20s
 
 volumes:
-  fhub_appdata:
+  fhub_dev_8686_appdata:
 
 networks:
-  fhub_net:
-    name: fhub_net
+  fhub_dev_8686_net:
+    name: fhub_dev_8686_net

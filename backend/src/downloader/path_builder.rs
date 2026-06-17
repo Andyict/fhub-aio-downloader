@@ -41,13 +41,21 @@ impl PathBuilder {
         tmdb: &Option<TmdbDownloadMetadata>, 
         root_dir: &Path
     ) -> String {
-        let base_dir = root_dir;
+        let movies_root = std::env::var("FHUB_MOVIES_DIR")
+            .ok()
+            .filter(|v| !v.trim().is_empty())
+            .map(std::path::PathBuf::from);
+        let shows_root = std::env::var("FHUB_SHOWS_DIR")
+            .ok()
+            .filter(|v| !v.trim().is_empty())
+            .map(std::path::PathBuf::from);
         
         if let Some(meta) = tmdb {
             let media_type = meta.media_type.as_deref().unwrap_or(category);
             
             match media_type {
                 "movie" => {
+                    let base_dir = movies_root.as_deref().unwrap_or(root_dir);
                     // Build: [Collection]/MovieName (Year)/filename
                     let movie_folder = if let Some(ref title) = meta.title {
                         if let Some(ref year) = meta.year {
@@ -73,6 +81,7 @@ impl PathBuilder {
                     }
                 }
                 "tv" => {
+                    let base_dir = shows_root.as_deref().unwrap_or(root_dir);
                     // Build: SeriesName/Season XX/filename
                     let series_folder = if let Some(ref title) = meta.title {
                         Self::sanitize_filename(title)
@@ -93,12 +102,17 @@ impl PathBuilder {
                         .to_string()
                 }
                 _ => {
-                    // Default: just use base dir
-                    base_dir.join(filename).to_string_lossy().to_string()
+                    // Default: just use root dir
+                    root_dir.join(filename).to_string_lossy().to_string()
                 }
             }
         } else {
-            // No TMDB metadata, use simple path
+            // No TMDB metadata: route by explicit category when available.
+            let base_dir = match category {
+                "movie" | "movies" => movies_root.as_deref().unwrap_or(root_dir),
+                "tv" | "show" | "shows" | "series" => shows_root.as_deref().unwrap_or(root_dir),
+                _ => root_dir,
+            };
             base_dir.join(filename).to_string_lossy().to_string()
         }
     }
