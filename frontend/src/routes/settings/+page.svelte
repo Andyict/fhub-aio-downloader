@@ -791,31 +791,38 @@
       </details>
       <small class="config-note">Ưu tiên tốc độ: chọn “Nhanh nhất”. Nếu FShare báo timeout/503 thì lùi về “Cân bằng”.</small>
       <button type="button" class="primary-button compact-save" onclick={saveSettings} disabled={saving}>{saving ? "Đang lưu..." : "Lưu cấu hình"}</button>
-
-      <div class="category-manager">
-        <div class="category-head">
-          <div>
-            <strong>Thư mục phân loại</strong>
-            <small>Tạo các nơi lưu như Phim lẻ, Phim bộ, Hoạt hình. Khi tải, chọn “Lưu vào” là file tự về đúng thư mục.</small>
-          </div>
-          <button type="button" class="ghost-mini" onclick={addDownloadCategory}><span class="material-icons">add</span>Thêm</button>
-        </div>
-        <div class="category-list">
-          {#each downloadCategories as item, index}
-            <div class="category-row">
-              <label><span>Tên</span><input value={item.label} oninput={(event) => updateDownloadCategory(index, "label", event.currentTarget.value)} /></label>
-              <label><span>Đường dẫn</span><input value={item.path} oninput={(event) => updateDownloadCategory(index, "path", event.currentTarget.value)} placeholder="/downloads/Movies" /></label>
-              <button type="button" class="icon-danger" onclick={() => removeDownloadCategory(index)} aria-label="Xóa thư mục"><span class="material-icons">delete</span></button>
-            </div>
-          {/each}
-        </div>
-        <div class="category-actions">
-          <button type="button" class="primary-button compact-save" onclick={saveDownloadCategories} disabled={categorySaving}>{categorySaving ? "Đang lưu..." : "Lưu thư mục"}</button>
-          {#if categoryMessage}<small class="config-note">{categoryMessage}</small>{/if}
-        </div>
-      </div>
     </div>
   {/if}
+{/snippet}
+
+
+{#snippet DownloadCategoriesPanel()}
+  <div class="panel-title compact-title">
+    <div><h2>Thư mục phân loại</h2></div>
+    <span class="panel-chip">{downloadCategories.length} mục</span>
+  </div>
+  <div class="category-manager standalone-category-manager">
+    <div class="category-head">
+      <div>
+        <strong>Lưu phim theo thể loại</strong>
+        <small>Tạo các nơi lưu như Phim lẻ, Phim bộ, Hoạt hình. Khi tải, chọn “Lưu vào” là file tự về đúng thư mục.</small>
+      </div>
+      <button type="button" class="ghost-mini" onclick={addDownloadCategory}><span class="material-icons">add</span>Thêm</button>
+    </div>
+    <div class="category-list">
+      {#each downloadCategories as item, index}
+        <div class="category-row">
+          <label><span>Tên</span><input value={item.label} oninput={(event) => updateDownloadCategory(index, "label", event.currentTarget.value)} /></label>
+          <label><span>Đường dẫn</span><input value={item.path} oninput={(event) => updateDownloadCategory(index, "path", event.currentTarget.value)} placeholder="/downloads/Movies" /></label>
+          <button type="button" class="icon-danger" onclick={() => removeDownloadCategory(index)} aria-label="Xóa thư mục"><span class="material-icons">delete</span></button>
+        </div>
+      {/each}
+    </div>
+    <div class="category-actions">
+      <button type="button" class="primary-button compact-save" onclick={saveDownloadCategories} disabled={categorySaving}>{categorySaving ? "Đang lưu..." : "Lưu thư mục"}</button>
+      {#if categoryMessage}<small class="config-note">{categoryMessage}</small>{/if}
+    </div>
+  </div>
 {/snippet}
 
 {#snippet AutoTrackPanel()}
@@ -1371,4 +1378,5 @@
 
   .category-manager{display:grid;gap:.8rem;margin-top:.9rem;padding:.9rem;border-radius:18px;background:rgba(255,255,255,.045);border:1px solid rgba(148,163,184,.14)}
   .category-head{display:flex;justify-content:space-between;gap:.8rem;align-items:flex-start}.category-head strong{display:block;color:#fff}.category-head small{display:block;margin-top:.25rem;color:#aab4c3;line-height:1.35}.ghost-mini{min-height:34px;padding:0 .7rem;border-radius:999px;background:rgba(255,255,255,.07);border:1px solid rgba(148,163,184,.16);color:#f8fafc;font-weight:850;display:inline-flex;align-items:center;gap:.35rem}.ghost-mini .material-icons{font-size:17px}.category-list{display:grid;gap:.55rem}.category-row{display:grid;grid-template-columns:minmax(120px,.8fr) minmax(180px,1.4fr) 38px;gap:.55rem;align-items:end}.category-row label{display:grid;gap:.25rem}.category-row label span{font-size:.72rem;color:#aab4c3;font-weight:850}.category-row input{min-height:38px;border-radius:12px;border:1px solid rgba(148,163,184,.18);background:rgba(2,6,23,.38);color:#f8fafc;padding:0 .7rem}.icon-danger{width:38px;height:38px;min-height:38px;padding:0;border-radius:12px;border:1px solid rgba(248,113,113,.22);background:rgba(248,113,113,.11);color:#fecaca}.icon-danger .material-icons{font-size:18px}.category-actions{display:flex;gap:.7rem;align-items:center;flex-wrap:wrap}@media(max-width:720px){.category-row{grid-template-columns:1fr}.icon-danger{width:100%}}
+  .standalone-category-manager{margin-top:0;background:rgba(15,23,42,.34)}
 </style>
