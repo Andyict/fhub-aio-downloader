@@ -148,6 +148,8 @@ export interface AddDownloadRequest {
   batch_name?: string;
   /** Optional folder name under the download root for manual series grouping */
   folder_name?: string;
+  /** Optional selected destination folder from Settings download categories */
+  download_folder?: string;
 }
 
 /**

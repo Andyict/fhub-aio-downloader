@@ -40,7 +40,11 @@
   let filename = $state("");
   let seriesMode = $state(false);
   let seriesTitle = $state("");
+  type DownloadCategory = { id: string; label: string; path: string };
+
   let category = $state("movies");
+  let downloadCategories = $state<DownloadCategory[]>([]);
+  let selectedDownloadCategoryId = $state("movies");
   let priority = $state<"NORMAL" | "HIGH" | "LOW">("NORMAL");
   let error = $state("");
   let isSubmitting = $state(false);
@@ -95,8 +99,39 @@
   $effect(() => {
     if (seriesMode) {
       category = "tv";
+      if (downloadCategories.some((item) => item.id === "shows")) selectedDownloadCategoryId = "shows";
+    } else if (category === "tv") {
+      category = "movies";
+      if (downloadCategories.some((item) => item.id === "movies")) selectedDownloadCategoryId = "movies";
     }
   });
+
+  $effect(() => {
+    if (isOpen) void loadDownloadCategories();
+  });
+
+  async function loadDownloadCategories() {
+    try {
+      const response = await fetch("/api/settings/download-categories", { credentials: "include" });
+      if (!response.ok) return;
+      const payload = await response.json();
+      const items = Array.isArray(payload?.categories) ? payload.categories : [];
+      downloadCategories = items.filter((item: DownloadCategory) => item?.id && item?.label && item?.path);
+      if (downloadCategories.length && !downloadCategories.some((item) => item.id === selectedDownloadCategoryId)) {
+        selectedDownloadCategoryId = downloadCategories[0].id;
+      }
+    } catch {
+      // Keep legacy category selector usable if categories cannot be loaded.
+    }
+  }
+
+  function selectedDownloadFolder(): string | undefined {
+    return downloadCategories.find((item) => item.id === selectedDownloadCategoryId)?.path;
+  }
+
+  function selectedDownloadCategoryLabel(): string {
+    return downloadCategories.find((item) => item.id === selectedDownloadCategoryId)?.label || category;
+  }
 
   function parseDownloadUrls(input: string): string[] {
     const urls = input
@@ -192,6 +227,7 @@
           batch_id: batchId,
           batch_name: folderName,
           folder_name: folderName,
+          download_folder: selectedDownloadFolder(),
         };
 
         if (filename.trim() && urls.length === 1) {
@@ -233,6 +269,7 @@
           batch_id: batchId,
           batch_name: batchName,
           folder_name: seriesMode ? batchName : undefined,
+          download_folder: selectedDownloadFolder(),
         });
 
         if (!response.success) {
@@ -267,7 +304,7 @@
       title: seriesMode ? "Start series downloads?" : "Start this download?",
       subtitle: seriesMode
         ? `${parseDownloadUrls(url).length} tập • thư mục: ${seriesFolderLabel()}`
-        : `${filename.trim() || "Fshare file"}${category ? ` • ${category}` : ""}`,
+        : `${filename.trim() || "Fshare file"} • ${selectedDownloadCategoryLabel()}`,
       count: parseDownloadUrls(url).length,
       items: [],
     });
@@ -379,6 +416,7 @@
     seriesMode = false;
     seriesTitle = "";
     category = "movies";
+    selectedDownloadCategoryId = downloadCategories.some((item) => item.id === "movies") ? "movies" : (downloadCategories[0]?.id || "movies");
     priority = "NORMAL";
     error = "";
     detectedHost = "";
@@ -559,18 +597,29 @@
       <div class="form-row">
         <div class="form-group">
           <label for="download-category">
-            <span class="label-text">Category</span>
+            <span class="label-text">Lưu vào</span>
           </label>
-          <select
-            id="download-category"
-            bind:value={category}
-            disabled={isSubmitting}
-          >
-            <option value="movies">Movies</option>
-            <option value="tv">TV Shows</option>
-            <option value="music">Music</option>
-            <option value="other">Other</option>
-          </select>
+          {#if downloadCategories.length}
+            <select
+              id="download-category"
+              bind:value={selectedDownloadCategoryId}
+              disabled={isSubmitting}
+            >
+              {#each downloadCategories as item}
+                <option value={item.id}>{item.label}</option>
+              {/each}
+            </select>
+          {:else}
+            <select
+              id="download-category"
+              bind:value={category}
+              disabled={isSubmitting}
+            >
+              <option value="movies">Phim lẻ</option>
+              <option value="tv">Phim bộ</option>
+              <option value="other">Khác</option>
+            </select>
+          {/if}
         </div>
 
         <div class="form-group">
@@ -635,7 +684,7 @@
           <div class="confirm-stats">
             <div><strong>{pendingDownloadConfirm.count}</strong><span>{pendingDownloadConfirm.count === 1 ? "file" : "files"}</span></div>
             <div><strong>{pendingDownloadConfirm.size ? formatBytes(pendingDownloadConfirm.size) : "—"}</strong><span>total size</span></div>
-            <div><strong>{category}</strong><span>category</span></div>
+            <div><strong>{selectedDownloadCategoryLabel()}</strong><span>lưu vào</span></div>
           </div>
 
           {#if pendingDownloadConfirm.items.length > 0}

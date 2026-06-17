@@ -178,7 +178,7 @@ impl DownloadOrchestrator {
         host: String,
         category: String,
     ) -> Result<DownloadTask, anyhow::Error> {
-        self.add_download_with_metadata(url, Some(filename), host, category, None, None, None, None).await
+        self.add_download_with_metadata(url, Some(filename), host, category, None, None, None, None, None).await
     }
     
     /// Add a new download with TMDB metadata for organized folder structure
@@ -192,6 +192,7 @@ impl DownloadOrchestrator {
         batch_id: Option<String>,
         batch_name: Option<String>,
         folder_name: Option<String>,
+        download_folder: Option<String>,
     ) -> Result<DownloadTask, anyhow::Error> {
         // === DEBUG: Log orchestrator input ===
         tracing::info!("=== [ORCHESTRATOR] add_download_with_metadata called ===");
@@ -372,7 +373,14 @@ impl DownloadOrchestrator {
             None
         };
         let manual_folder_name = folder_name.or(inferred_series_folder);
-        let routed_download_dir = match category.as_str() {
+        let selected_download_dir = download_folder
+            .as_deref()
+            .map(str::trim)
+            .filter(|v| !v.is_empty())
+            .map(PathBuf::from);
+        let routed_download_dir = if let Some(dir) = selected_download_dir.clone() {
+            dir
+        } else { match category.as_str() {
             "tv" | "show" | "shows" | "series" => std::env::var("FHUB_SHOWS_DIR")
                 .ok()
                 .filter(|v| !v.trim().is_empty())
@@ -388,7 +396,7 @@ impl DownloadOrchestrator {
                 .filter(|v| !v.trim().is_empty())
                 .map(PathBuf::from)
                 .unwrap_or_else(|| download_dir.join("Movies")),
-        };
+        }};
 
         // Build destination with FHub-compatible filename.
         // Manual series mode uses folder_name when TMDB metadata is not available,
@@ -399,13 +407,37 @@ impl DownloadOrchestrator {
                 if !clean_folder.is_empty() {
                     routed_download_dir.join(clean_folder).join(&final_filename).to_string_lossy().to_string()
                 } else {
-                    self.build_destination_path(&final_filename, &category, &tmdb_metadata, &download_dir)
-                }
+                    if selected_download_dir.is_some() {
+                        routed_download_dir.join(&final_filename).to_string_lossy().to_string()
+                    } else {
+                        if selected_download_dir.is_some() {
+                    routed_download_dir.join(&final_filename).to_string_lossy().to_string()
+                } else {
+                    if selected_download_dir.is_some() {
+                routed_download_dir.join(&final_filename).to_string_lossy().to_string()
             } else {
                 self.build_destination_path(&final_filename, &category, &tmdb_metadata, &download_dir)
             }
+                }
+                    }
+                }
+            } else {
+                if selected_download_dir.is_some() {
+                    routed_download_dir.join(&final_filename).to_string_lossy().to_string()
+                } else {
+                    if selected_download_dir.is_some() {
+                routed_download_dir.join(&final_filename).to_string_lossy().to_string()
+            } else {
+                self.build_destination_path(&final_filename, &category, &tmdb_metadata, &download_dir)
+            }
+                }
+            }
         } else {
-            self.build_destination_path(&final_filename, &category, &tmdb_metadata, &download_dir)
+            if selected_download_dir.is_some() {
+                routed_download_dir.join(&final_filename).to_string_lossy().to_string()
+            } else {
+                self.build_destination_path(&final_filename, &category, &tmdb_metadata, &download_dir)
+            }
         };
 
         // Duplicate guard by final destination. FShare folders may contain multiple encodes

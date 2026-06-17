@@ -110,6 +110,9 @@ Theo mặc định, FHub tự phân loại đường dẫn tải về bên trong
 
 Bạn không cần mount riêng `Movies` hoặc `Shows`. Nếu hai thư mục này chưa có, FHub/Docker sẽ tạo khi có lượt tải tương ứng.
 
+Trong **Settings → Bộ máy tải → Cấu hình nâng cao → Thư mục phân loại**, admin có thể tạo/sửa các nơi lưu như `Phim lẻ`, `Phim bộ`, `Phim hoạt hình`, `Tài liệu`... Khi thêm download, chọn mục **Lưu vào** để file tự về đúng thư mục đã cấu hình.
+
+
 ## Cập nhật
 
 ### Cách 1: Cập nhật thủ công

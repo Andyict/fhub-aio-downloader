@@ -257,6 +257,7 @@ async fn handle_add_file(
                 batch_id,
                 batch_name,
                 None,
+                None,
             ).await.map_err(|e| {
                 tracing::error!("Failed to add download: {}", e);
                 StatusCode::INTERNAL_SERVER_ERROR

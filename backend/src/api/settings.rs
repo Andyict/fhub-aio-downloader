@@ -4,6 +4,7 @@
 
 use axum::{extract::State, routing::{get, put}, Json, Router};
 use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use crate::AppState;
 
@@ -18,6 +19,8 @@ pub fn router() -> Router<Arc<AppState>> {
         .route("/indexer/generate-key", get(generate_api_key))
         .route("/auto-track", get(get_auto_track_settings))
         .route("/auto-track", put(update_auto_track_settings))
+        .route("/download-categories", get(get_download_categories))
+        .route("/download-categories", put(update_download_categories))
 }
 
 #[derive(Serialize)]
@@ -44,6 +47,18 @@ struct IndexerSettings {
     enabled: bool,
     api_key: String,
     indexer_url: String,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+struct DownloadCategory {
+    id: String,
+    label: String,
+    path: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct DownloadCategoriesSettings {
+    categories: Vec<DownloadCategory>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -151,6 +166,81 @@ async fn update_indexer_settings(
         success: true,
         message: Some("API settings updated successfully".to_string()),
     })
+}
+
+fn sanitize_category_id(label: &str, fallback: &str) -> String {
+    let mut out = String::new();
+    for ch in label.chars() {
+        if ch.is_ascii_alphanumeric() {
+            out.push(ch.to_ascii_lowercase());
+        } else if ch.is_whitespace() || ch == '-' || ch == '_' {
+            if !out.ends_with('-') { out.push('-'); }
+        }
+    }
+    let out = out.trim_matches('-').to_string();
+    if out.is_empty() { fallback.to_string() } else { out }
+}
+
+fn normalize_category_path(root: &Path, value: &str) -> String {
+    let trimmed = value.trim();
+    if trimmed.is_empty() { return root.join("Movies").to_string_lossy().to_string(); }
+    let path = PathBuf::from(trimmed);
+    if path.is_absolute() {
+        path.to_string_lossy().to_string()
+    } else {
+        root.join(path).to_string_lossy().to_string()
+    }
+}
+
+fn default_download_categories(root: &Path) -> Vec<DownloadCategory> {
+    vec![
+        DownloadCategory { id: "movies".to_string(), label: "Phim lẻ".to_string(), path: root.join("Movies").to_string_lossy().to_string() },
+        DownloadCategory { id: "shows".to_string(), label: "Phim bộ".to_string(), path: root.join("Shows").to_string_lossy().to_string() },
+        DownloadCategory { id: "animation".to_string(), label: "Phim hoạt hình".to_string(), path: root.join("Animation").to_string_lossy().to_string() },
+        DownloadCategory { id: "others".to_string(), label: "Khác".to_string(), path: root.join("Others").to_string_lossy().to_string() },
+    ]
+}
+
+fn load_download_categories(state: &AppState) -> Vec<DownloadCategory> {
+    let root = state.config.downloads.directory.clone();
+    state.db.get_setting("download_categories")
+        .ok()
+        .flatten()
+        .and_then(|raw| serde_json::from_str::<DownloadCategoriesSettings>(&raw).ok())
+        .map(|payload| payload.categories.into_iter().filter(|c| !c.label.trim().is_empty() && !c.path.trim().is_empty()).collect::<Vec<_>>())
+        .filter(|items| !items.is_empty())
+        .unwrap_or_else(|| default_download_categories(&root))
+}
+
+async fn get_download_categories(State(state): State<Arc<AppState>>) -> Json<DownloadCategoriesSettings> {
+    Json(DownloadCategoriesSettings { categories: load_download_categories(&state) })
+}
+
+async fn update_download_categories(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<DownloadCategoriesSettings>,
+) -> Json<ActionResponse> {
+    let root = state.config.downloads.directory.clone();
+    let mut categories = Vec::new();
+    for (index, item) in payload.categories.into_iter().enumerate() {
+        let label = item.label.trim().to_string();
+        if label.is_empty() { continue; }
+        let id_source = if item.id.trim().is_empty() { &label } else { item.id.trim() };
+        categories.push(DownloadCategory {
+            id: sanitize_category_id(id_source, &format!("category-{}", index + 1)),
+            label,
+            path: normalize_category_path(&root, &item.path),
+        });
+    }
+    if categories.is_empty() { categories = default_download_categories(&root); }
+    let raw = match serde_json::to_string(&DownloadCategoriesSettings { categories: categories.clone() }) {
+        Ok(raw) => raw,
+        Err(e) => return Json(ActionResponse { success: false, message: Some(format!("Không lưu được thư mục phân loại: {e}")) }),
+    };
+    if let Err(e) = state.db.save_setting("download_categories", &raw) {
+        return Json(ActionResponse { success: false, message: Some(format!("Không lưu được thư mục phân loại: {e}")) });
+    }
+    Json(ActionResponse { success: true, message: Some("Đã lưu thư mục phân loại tải xuống".to_string()) })
 }
 
 async fn get_auto_track_settings(State(state): State<Arc<AppState>>) -> Json<AutoTrackSettings> {

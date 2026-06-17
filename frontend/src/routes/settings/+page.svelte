@@ -15,6 +15,8 @@
     server_port: number;
   };
 
+  type DownloadCategory = { id: string; label: string; path: string };
+
   type AppUser = {
     id: string;
     username: string;
@@ -135,6 +137,9 @@
   let fshareLoginMessage = $state("");
   let fsharePanelOpen = $state(false);
   let downloadAdvancedOpen = $state(false);
+  let downloadCategories = $state<DownloadCategory[]>([]);
+  let categorySaving = $state(false);
+  let categoryMessage = $state("");
   let autoTrackIntervalSecs = $state(3600);
   let autoTrackSaving = $state(false);
   let autoTrackSavedMessage = $state("");
@@ -242,13 +247,14 @@
   async function refreshAll() {
     if (!isAdminUser) return;
     try {
-      const [settingsResponse, downloadsResponse, accountsResponse, healthResponse, usersResponse, autoTrackResponse] = await Promise.all([
+      const [settingsResponse, downloadsResponse, accountsResponse, healthResponse, usersResponse, autoTrackResponse, categoriesResponse] = await Promise.all([
         fetch("/api/settings"),
         fetch("/api/settings/downloads"),
         fetch("/api/accounts"),
         fetch("/api/health"),
         fetch("/api/auth/users", { credentials: "include" }),
         fetch("/api/settings/auto-track", { credentials: "include" }),
+        fetch("/api/settings/download-categories", { credentials: "include" }),
       ]);
 
       const appSettings = settingsResponse.ok ? await settingsResponse.json() : null;
@@ -258,8 +264,10 @@
       const health = healthResponse.ok ? await healthResponse.json() : null;
       const usersPayload = usersResponse.ok ? await usersResponse.json() : { users: [] };
       const autoTrackSettings = autoTrackResponse.ok ? await autoTrackResponse.json() : null;
+      const categoryPayload = categoriesResponse.ok ? await categoriesResponse.json() : null;
       users = Array.isArray(usersPayload) ? usersPayload : (usersPayload.users || []);
       autoTrackIntervalSecs = Number(autoTrackSettings?.check_interval_secs || autoTrackIntervalSecs);
+      downloadCategories = Array.isArray(categoryPayload?.categories) ? categoryPayload.categories : downloadCategories;
 
       settings = {
         max_concurrent_downloads: downloadSettings?.max_concurrent ?? appSettings?.downloads?.max_concurrent ?? settings.max_concurrent_downloads,
@@ -470,6 +478,43 @@
     if (secs < 3600) return `${Math.round(secs / 60)} phút`;
     const hours = secs / 3600;
     return `${Number.isInteger(hours) ? hours : hours.toFixed(1)} giờ`;
+  }
+
+  function addDownloadCategory() {
+    const index = downloadCategories.length + 1;
+    downloadCategories = [...downloadCategories, { id: `custom-${index}`, label: "Thư mục mới", path: `${downloadDirectory || "/downloads"}/New Folder` }];
+    categoryMessage = "";
+  }
+
+  function removeDownloadCategory(index: number) {
+    downloadCategories = downloadCategories.filter((_, i) => i !== index);
+    categoryMessage = "";
+  }
+
+  function updateDownloadCategory(index: number, field: keyof DownloadCategory, value: string) {
+    downloadCategories = downloadCategories.map((item, i) => i === index ? { ...item, [field]: value } : item);
+    categoryMessage = "";
+  }
+
+  async function saveDownloadCategories() {
+    categorySaving = true;
+    categoryMessage = "";
+    try {
+      const response = await fetch("/api/settings/download-categories", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ categories: downloadCategories }),
+      });
+      const result = response.ok ? await response.json() : { success: false, message: await response.text() };
+      if (!response.ok || result.success === false) throw new Error(result.message || "Không lưu được thư mục phân loại");
+      categoryMessage = result.message || "Đã lưu thư mục phân loại.";
+      await refreshAll();
+    } catch (error) {
+      categoryMessage = error instanceof Error ? error.message : "Không lưu được thư mục phân loại";
+    } finally {
+      categorySaving = false;
+    }
   }
 
   async function saveSettings() {
@@ -746,6 +791,29 @@
       </details>
       <small class="config-note">Ưu tiên tốc độ: chọn “Nhanh nhất”. Nếu FShare báo timeout/503 thì lùi về “Cân bằng”.</small>
       <button type="button" class="primary-button compact-save" onclick={saveSettings} disabled={saving}>{saving ? "Đang lưu..." : "Lưu cấu hình"}</button>
+
+      <div class="category-manager">
+        <div class="category-head">
+          <div>
+            <strong>Thư mục phân loại</strong>
+            <small>Tạo các nơi lưu như Phim lẻ, Phim bộ, Hoạt hình. Khi tải, chọn “Lưu vào” là file tự về đúng thư mục.</small>
+          </div>
+          <button type="button" class="ghost-mini" onclick={addDownloadCategory}><span class="material-icons">add</span>Thêm</button>
+        </div>
+        <div class="category-list">
+          {#each downloadCategories as item, index}
+            <div class="category-row">
+              <label><span>Tên</span><input value={item.label} oninput={(event) => updateDownloadCategory(index, "label", event.currentTarget.value)} /></label>
+              <label><span>Đường dẫn</span><input value={item.path} oninput={(event) => updateDownloadCategory(index, "path", event.currentTarget.value)} placeholder="/downloads/Movies" /></label>
+              <button type="button" class="icon-danger" onclick={() => removeDownloadCategory(index)} aria-label="Xóa thư mục"><span class="material-icons">delete</span></button>
+            </div>
+          {/each}
+        </div>
+        <div class="category-actions">
+          <button type="button" class="primary-button compact-save" onclick={saveDownloadCategories} disabled={categorySaving}>{categorySaving ? "Đang lưu..." : "Lưu thư mục"}</button>
+          {#if categoryMessage}<small class="config-note">{categoryMessage}</small>{/if}
+        </div>
+      </div>
     </div>
   {/if}
 {/snippet}
@@ -1300,4 +1368,7 @@
   .update-modal-actions.simple .update-confirm-button { min-height: 58px; }
   @media (max-width: 560px) { .update-modal { width: min(360px, 100%); max-height: calc(100dvh - 150px); overflow: auto; } .update-modal-head.compact .update-modal-mark { width: 64px; height: 64px; } .update-modal-head.compact h2 { font-size: 2.25rem; } .update-modal-actions.simple { grid-template-columns: 1fr 1fr; } }
 
+
+  .category-manager{display:grid;gap:.8rem;margin-top:.9rem;padding:.9rem;border-radius:18px;background:rgba(255,255,255,.045);border:1px solid rgba(148,163,184,.14)}
+  .category-head{display:flex;justify-content:space-between;gap:.8rem;align-items:flex-start}.category-head strong{display:block;color:#fff}.category-head small{display:block;margin-top:.25rem;color:#aab4c3;line-height:1.35}.ghost-mini{min-height:34px;padding:0 .7rem;border-radius:999px;background:rgba(255,255,255,.07);border:1px solid rgba(148,163,184,.16);color:#f8fafc;font-weight:850;display:inline-flex;align-items:center;gap:.35rem}.ghost-mini .material-icons{font-size:17px}.category-list{display:grid;gap:.55rem}.category-row{display:grid;grid-template-columns:minmax(120px,.8fr) minmax(180px,1.4fr) 38px;gap:.55rem;align-items:end}.category-row label{display:grid;gap:.25rem}.category-row label span{font-size:.72rem;color:#aab4c3;font-weight:850}.category-row input{min-height:38px;border-radius:12px;border:1px solid rgba(148,163,184,.18);background:rgba(2,6,23,.38);color:#f8fafc;padding:0 .7rem}.icon-danger{width:38px;height:38px;min-height:38px;padding:0;border-radius:12px;border:1px solid rgba(248,113,113,.22);background:rgba(248,113,113,.11);color:#fecaca}.icon-danger .material-icons{font-size:18px}.category-actions{display:flex;gap:.7rem;align-items:center;flex-wrap:wrap}@media(max-width:720px){.category-row{grid-template-columns:1fr}.icon-danger{width:100%}}
 </style>

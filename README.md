@@ -110,6 +110,9 @@ By default, FHub automatically splits download destinations inside this folder:
 
 You do not need to mount `Movies` or `Shows` separately. If these folders do not exist yet, FHub/Docker will create them when the matching download starts.
 
+In **Settings → Download engine → Advanced config → Download categories**, admins can create/edit destinations such as `Movies`, `Shows`, `Animation`, `Documentary`, and more. When adding a download, choose **Save to** and FHub will send the file to the configured folder.
+
+
 ## Updating
 
 ### Option 1: Manual update

@@ -205,6 +205,9 @@ pub struct AddDownloadRequest {
     /// show name land in the same folder even without TMDB metadata.
     #[serde(default)]
     pub folder_name: Option<String>,
+    /// Optional absolute/inside-container folder selected from Settings download categories.
+    #[serde(default)]
+    pub download_folder: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -725,6 +728,7 @@ async fn add_download(
         batch_id,
         batch_name,
         payload.folder_name,
+        payload.download_folder,
     ).await {
         Ok(task) => task,
         Err(e) => {
