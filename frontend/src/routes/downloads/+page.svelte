@@ -95,13 +95,17 @@
   let pendingDownloadName = $state("");
   let pendingDownloadSize = $state(0);
   let recursive = $state(true);
-  let downloadMode = $state<"movie" | "series" | "auto-track">("movie");
+  let downloadMode = $state<"movie" | "series">("movie");
+  let autoTrackRequested = $state(false);
   const seriesMode = $derived(downloadMode === "series");
-  const autoTrackMode = $derived(downloadMode === "auto-track");
+  const autoTrackMode = $derived(autoTrackRequested);
   let showDownloadConfirm = $state(false);
   let confirmTapInProgress = $state(false);
   type LinkHistoryEntry = { url: string; title?: string };
+  type DownloadCategory = { id: string; label: string; path: string };
 
+  let downloadCategories = $state<DownloadCategory[]>([]);
+  let selectedDownloadCategoryId = $state("movies");
   let showLinkHistory = $state(false);
   let linkHistory = $state<LinkHistoryEntry[]>([]);
 
@@ -127,6 +131,8 @@
   const downloadablePreviewItems = $derived(sortPreviewItems((preview?.items || []).filter((item) => !item.is_directory)));
   const selectedPreviewItems = $derived(downloadablePreviewItems.filter((item) => selectedUrls.has(item.url)));
   const selectedPreviewSize = $derived(selectedPreviewItems.reduce((sum, item) => sum + (item.size || 0), 0));
+  const selectedDownloadFolder = $derived(downloadCategories.find((item) => item.id === selectedDownloadCategoryId)?.path);
+  const selectedDownloadCategoryLabel = $derived(downloadCategories.find((item) => item.id === selectedDownloadCategoryId)?.label || (seriesMode ? "Phim bộ" : "Phim lẻ"));
   const confirmLabels = $derived(language === "vi" ? {
     title: "Xác nhận tải xuống?",
     count: "file sẽ được thêm vào queue.",
@@ -148,6 +154,7 @@
   onMount(() => {
     loadLanguage();
     loadLinkHistory();
+    void loadDownloadCategories();
     const params = new URLSearchParams(window.location.search);
     const url = params.get("url")?.trim();
     if (url) {
@@ -344,6 +351,7 @@
     checkLoading = true;
     preview = null;
     autoTrackEnabled = false;
+    autoTrackRequested = false;
     selectedUrls = new Set();
     status = "Đang check link FShare, chưa tải...";
     try {
@@ -356,6 +364,7 @@
       if (!res.ok) throw new Error(await safeText(res));
       preview = await res.json();
       autoTrackEnabled = false;
+      autoTrackRequested = false;
       rememberLink(clean, preview?.folder_name || preview?.items?.find((item) => !item.is_directory)?.name);
       selectAllPreview();
       const count = downloadablePreviewItems.length || preview?.file_count || 0;
@@ -372,10 +381,7 @@
   }
 
   function confirmPreviewFromPanel() {
-    if (autoTrackMode) {
-      void createAutoTrackFromPreview();
-      return;
-    }
+    if (autoTrackRequested) void createAutoTrackFromPreview();
     openDownloadConfirm();
   }
 
@@ -403,6 +409,7 @@
           category: "tv",
           season: firstSeason,
           batch_name: preview.folder_name || "Auto Track series",
+          download_folder: selectedDownloadFolder,
           check_now: false,
         }),
       }, 15000);
@@ -494,6 +501,7 @@
           batch_id: batchId,
           batch_name: batchName,
           folder_name: folderName,
+          download_folder: selectedDownloadFolder,
         }),
       }, 15000)));
 
@@ -780,6 +788,30 @@
     return text || `HTTP ${res.status}`;
   }
 
+
+  async function loadDownloadCategories() {
+    try {
+      const response = await fetch("/api/settings/download-categories", { credentials: "include" });
+      if (!response.ok) return;
+      const payload = await response.json();
+      const items = Array.isArray(payload?.categories) ? payload.categories.filter((item: DownloadCategory) => item?.id && item?.label && item?.path) : [];
+      downloadCategories = items;
+      const preferred = seriesMode ? "shows" : "movies";
+      if (items.some((item: DownloadCategory) => item.id === preferred)) {
+        selectedDownloadCategoryId = preferred;
+      } else if (items.length && !items.some((item: DownloadCategory) => item.id === selectedDownloadCategoryId)) {
+        selectedDownloadCategoryId = items[0].id;
+      }
+    } catch {
+      // Keep legacy buttons if categories are unavailable.
+    }
+  }
+
+  $effect(() => {
+    if (!downloadCategories.length) return;
+    const preferred = seriesMode ? "shows" : "movies";
+    if (downloadCategories.some((item) => item.id === preferred)) selectedDownloadCategoryId = preferred;
+  });
   function messageOf(err: unknown) {
     return err instanceof Error ? err.message : "lỗi không xác định";
   }
@@ -850,25 +882,34 @@
         {/each}
       </div>
     {/if}
-    {#if preview && downloadablePreviewItems.length > 1}
-      <div class="download-mode-toggle" class:series={seriesMode} class:auto-track={autoTrackMode} aria-label="Chọn kiểu tải">
+    {#if preview}
+      <div class="download-mode-toggle" class:series={seriesMode} aria-label="Chọn kiểu nội dung">
         <div class="mode-toggle-label">
-          <span class="material-icons">{autoTrackMode ? "sync" : seriesMode ? "video_library" : "movie"}</span>
-          <strong>{autoTrackMode ? "Auto Track" : seriesMode ? "Phim bộ" : "Phim lẻ"}</strong>
+          <span class="material-icons">drive_folder_upload</span>
+          <strong>Lưu vào</strong>
         </div>
-        <div class="mode-switch three-modes" role="group" aria-label="Chọn chế độ tải">
-          <span class="mode-glow" aria-hidden="true"></span>
-          <button type="button" class:active={downloadMode === "movie"} aria-pressed={downloadMode === "movie"} onclick={() => (downloadMode = "movie")}>
-            <span class="material-icons">movie</span><strong>Phim lẻ</strong>
-          </button>
-          <button type="button" class:active={downloadMode === "series"} aria-pressed={downloadMode === "series"} onclick={() => (downloadMode = "series")}>
-            <span class="material-icons">video_library</span><strong>Phim bộ</strong>
-          </button>
-          <button type="button" class:active={downloadMode === "auto-track"} aria-pressed={downloadMode === "auto-track"} onclick={() => (downloadMode = "auto-track")} disabled={!(preview.folder_code || isFolderPreview(preview.resolved_url) || isFolderPreview(preview.original_url))}>
-            <span class="material-icons">sync</span><strong>Auto Track</strong>
-          </button>
-        </div>
+        {#if downloadCategories.length}
+          <select class="save-target-select" bind:value={selectedDownloadCategoryId} disabled={downloadLoading || checkLoading}>
+            {#each downloadCategories as item}
+              <option value={item.id}>{item.label}</option>
+            {/each}
+          </select>
+        {:else}
+          <div class="mode-switch" role="group" aria-label="Chọn nơi lưu">
+            <span class="mode-glow" aria-hidden="true"></span>
+            <button type="button" class:active={downloadMode === "movie"} aria-pressed={downloadMode === "movie"} onclick={() => (downloadMode = "movie")}><span class="material-icons">movie</span><strong>Phim lẻ</strong></button>
+            <button type="button" class:active={downloadMode === "series"} aria-pressed={downloadMode === "series"} onclick={() => (downloadMode = "series")}><span class="material-icons">video_library</span><strong>Phim bộ</strong></button>
+          </div>
+        {/if}
       </div>
+      {#if preview.folder_code || isFolderPreview(preview.resolved_url) || isFolderPreview(preview.original_url)}
+        <label class="auto-track-toggle" class:active={autoTrackRequested || autoTrackEnabled}>
+          <input type="checkbox" bind:checked={autoTrackRequested} disabled={autoTrackLoading || autoTrackEnabled} />
+          <span class="auto-track-icon"><span class="material-icons">sync</span></span>
+          <span class="auto-track-copy"><strong>Auto Track</strong><small>Theo dõi folder, lưu vào mục đang chọn</small></span>
+          <span class="auto-track-switch" aria-hidden="true"><span></span></span>
+        </label>
+      {/if}
     {/if}
   </div>
 
@@ -978,6 +1019,7 @@
         </div>
       </div>
       <div class="confirm-box"><span>{confirmLabels.size}</span><strong>{formatBytes(pendingDownloadSize)}</strong></div>
+      <div class="confirm-box"><span>Lưu vào</span><strong>{selectedDownloadCategoryLabel}</strong></div>
       <div class="modal-actions">
         <button type="button" onclick={() => { showDownloadConfirm = false; pendingDownloadItems = []; pendingDownloadName = ""; pendingDownloadSize = 0; status = language === "vi" ? "Đã huỷ tải xuống." : "Download cancelled."; }} disabled={false}>{confirmLabels.cancel}</button>
         <button
@@ -1188,4 +1230,6 @@
 .mode-toggle-label small{display:none!important;}
 @media(max-width:560px){.mode-toggle-label{grid-template-columns:26px minmax(0,1fr) 30px!important}.mode-toggle-label small{display:none!important}}
 
+.quick-save-target{display:grid;grid-template-columns:24px auto minmax(0,220px);gap:.55rem;align-items:center;justify-content:end;padding:.55rem .65rem;border:1px solid rgba(248,193,74,.18);border-radius:16px;background:rgba(248,193,74,.07)}.quick-save-target label{color:#f8fafc;font-weight:900}.quick-save-target select{min-height:38px;border-radius:12px;border:1px solid rgba(148,163,184,.18);background:rgba(2,6,23,.6);color:#f8fafc;padding:0 .65rem;font-weight:850}@media(max-width:720px){.quick-save-target{grid-template-columns:24px minmax(0,1fr);justify-content:stretch}.quick-save-target select{grid-column:1/-1;width:100%}}
+.save-target-select{min-height:46px;border-radius:14px;border:1px solid rgba(148,163,184,.18);background:rgba(2,6,23,.6);color:#f8fafc;padding:0 .8rem;font-weight:950}.auto-track-toggle{position:relative;display:grid;grid-template-columns:42px minmax(0,1fr) 52px;gap:.72rem;align-items:center;padding:.68rem .78rem;border-radius:20px;border:1px solid rgba(96,165,250,.18);background:linear-gradient(135deg,rgba(59,130,246,.13),rgba(124,58,237,.08));box-shadow:inset 0 1px 0 rgba(255,255,255,.04);cursor:pointer;transition:.18s ease}.auto-track-toggle:hover{border-color:rgba(96,165,250,.34);background:linear-gradient(135deg,rgba(59,130,246,.18),rgba(124,58,237,.12))}.auto-track-toggle.active{border-color:rgba(74,222,128,.36);background:linear-gradient(135deg,rgba(34,197,94,.16),rgba(59,130,246,.1))}.auto-track-toggle input{position:absolute;opacity:0;pointer-events:none}.auto-track-icon{width:42px;height:42px;border-radius:15px;display:grid;place-items:center;background:rgba(15,23,42,.72);border:1px solid rgba(148,163,184,.14)}.auto-track-icon .material-icons{font-size:21px;color:#93c5fd}.auto-track-copy{min-width:0}.auto-track-copy strong,.auto-track-copy small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.auto-track-copy strong{color:#fff;font-size:1rem;letter-spacing:-.02em}.auto-track-copy small{margin-top:.12rem;color:#aab4c3;font-size:.78rem}.auto-track-switch{width:50px;height:28px;border-radius:999px;padding:3px;background:rgba(15,23,42,.8);border:1px solid rgba(148,163,184,.2);transition:.18s ease}.auto-track-switch span{display:block;width:20px;height:20px;border-radius:50%;background:#e5e7eb;box-shadow:0 3px 10px rgba(0,0,0,.35);transition:.18s ease}.auto-track-toggle.active .auto-track-switch{background:linear-gradient(135deg,#22c55e,#3b82f6);border-color:transparent}.auto-track-toggle.active .auto-track-switch span{transform:translateX(20px);background:#fff}@media(max-width:560px){.auto-track-toggle{grid-template-columns:38px minmax(0,1fr) 48px;padding:.62rem .68rem}.auto-track-icon{width:38px;height:38px}.auto-track-copy small{font-size:.74rem}}
 </style>

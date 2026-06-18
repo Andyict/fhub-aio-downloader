@@ -46,6 +46,7 @@
 
   type CastMember = { id: number; name: string; character?: string; profile?: string; };
   type RelatedFilm = { id: number; title: string; year?: string; score?: string; poster?: string; overview?: string; };
+  type DownloadCategory = { id: string; label: string; path: string };
 
   const BOOKMARKS_KEY = "fhub.search.bookmarks.v1";
   const fallbackPoster = "https://placehold.co/500x750/111827/e5e7eb?text=";
@@ -119,6 +120,8 @@
   let linkErrors = $state<Record<string, string>>({});
   let confirmDownloadLink = $state<FshareResult | null>(null);
   let confirmDownloadLinks = $state<FshareResult[]>([]);
+  let downloadCategories = $state<DownloadCategory[]>([]);
+  let selectedDownloadCategoryId = $state("movies");
   let showDownloadConfirm = $state(false);
   let showTrailerModal = $state(false);
   let selectedTrailerKey = $state<string | null>(null);
@@ -142,6 +145,8 @@
   const heroSlides = $derived((trending.length ? trending : displayed).filter((item) => item.heroImg || item.img).slice(0, 6));
   const activeHeroSlide = $derived(heroSlides[heroSlideIndex % Math.max(heroSlides.length, 1)]);
   const activeHeroImage = $derived(selectedImages[selectedImageIndex] || selectedFilm?.img || fallbackPoster);
+  const selectedDownloadFolder = $derived(downloadCategories.find((item) => item.id === selectedDownloadCategoryId)?.path);
+  const selectedDownloadCategoryLabel = $derived(downloadCategories.find((item) => item.id === selectedDownloadCategoryId)?.label || (selectedFilm?.type === "TV" || seriesMode ? "Phim bộ" : "Phim lẻ"));
   onMount(() => {
     syncLanguage();
     const syncPosterGridColumns = () => {
@@ -161,6 +166,7 @@
     window.addEventListener("focus", resyncLanguage);
     document.addEventListener("visibilitychange", resyncLanguage);
     loadBookmarkKeys();
+    void loadDownloadCategories();
     heroSlideTimer = window.setInterval(() => {
       if (heroSlides.length > 1) heroSlideIndex = (heroSlideIndex + 1) % heroSlides.length;
     }, 3600);
@@ -1053,6 +1059,30 @@
     }
   }
 
+
+  function syncDownloadCategoryWithMedia() {
+    if (!downloadCategories.length) return;
+    const preferred = selectedFilm?.type === "TV" || seriesMode ? "shows" : "movies";
+    if (downloadCategories.some((item) => item.id === preferred)) selectedDownloadCategoryId = preferred;
+  }
+
+  async function loadDownloadCategories() {
+    try {
+      const response = await fetch("/api/settings/download-categories", { credentials: "include" });
+      if (!response.ok) return;
+      const payload = await response.json();
+      const items = Array.isArray(payload?.categories) ? payload.categories.filter((item: DownloadCategory) => item?.id && item?.label && item?.path) : [];
+      downloadCategories = items;
+      syncDownloadCategoryWithMedia();
+      if (items.length && !items.some((item: DownloadCategory) => item.id === selectedDownloadCategoryId)) selectedDownloadCategoryId = items[0].id;
+    } catch {
+      // Discovery remains usable without custom categories.
+    }
+  }
+
+  function chooseDownloadCategory(id: string) {
+    selectedDownloadCategoryId = id;
+  }
   function openDownloadConfirm(link: FshareResult) {
     if (!link.url) {
       message = "Bản tải này chưa có URL FShare hợp lệ.";
@@ -1171,6 +1201,7 @@
           folder_code: folderCode,
           media_type: "tv",
           category: "tv",
+          download_folder: selectedDownloadFolder,
           tmdb_id: selectedFilm?.id,
           year: selectedFilm?.year ? Number(selectedFilm.year) || undefined : undefined,
           batch_name: selectedFilm?.title || firstLink.name || "Auto Track series",
@@ -1247,6 +1278,7 @@
           batch_id: batchId,
           batch_name: batchName,
           folder_name: seriesMode ? batchName : undefined,
+          download_folder: selectedDownloadFolder,
           tmdb: selectedFilm?.id ? {
             tmdb_id: selectedFilm.id,
             media_type: selectedFilm.type === "TV" ? "tv" : "movie",
@@ -1492,21 +1524,51 @@
               <button type="button" onclick={selectAllDownloads}>Chọn hết</button>
               <button type="button" onclick={clearSelectedDownloads}>Bỏ chọn</button>
             </div>
-            <div class="mode-line">
-              <button type="button" class:active={!seriesMode} onclick={() => (seriesMode = false)}>Phim lẻ</button>
-              <button type="button" class:active={seriesMode} onclick={() => (seriesMode = true)}>Phim bộ</button>
-              <button type="button" class="help-dot" aria-expanded={showSeriesHelp} onclick={() => (showSeriesHelp = !showSeriesHelp)}>!</button>
-            </div>
-            {#if showSeriesHelp}
-              <p class="series-help"><b>Phim bộ</b> sẽ gom các tập vào cùng thư mục: {selectedFilm?.title || "tự nhận diện"}. <b>Phim lẻ</b> tải từng file riêng.</p>
-            {/if}
-            <div class="series-download-actions">
-              {#if seriesMode}
-                <button type="button" class="series-autotrack-btn" class:active={discoveryAutoTrackEnabled} disabled={discoveryAutoTrackLoading} onclick={toggleAutoTrackFromDiscovery} title={discoveryAutoTrackEnabled ? "Tắt Auto Track" : "Bật Auto Track"}>
-                  <span class="material-icons">sync</span>
-                  <span>Auto Track</span>
-                </button>
+            <div class="discovery-save-card compact">
+              <span class="save-card-icon"><span class="material-icons">drive_folder_upload</span></span>
+              <div class="save-card-copy">
+                <strong>Lưu vào</strong>
+                <small>Auto Track dùng cùng thư mục này</small>
+              </div>
+              {#if downloadCategories.length}
+                <label class="pretty-select" aria-label="Chọn thư mục lưu">
+                  <select value={selectedDownloadCategoryId} onchange={(event) => chooseDownloadCategory(event.currentTarget.value)} disabled={!!addingLinkUrl || discoveryAutoTrackLoading}>
+                    {#each downloadCategories as item}
+                      <option value={item.id}>{item.label}</option>
+                    {/each}
+                  </select>
+                  <span class="material-icons">expand_more</span>
+                </label>
+              {:else}
+                <label class="pretty-select" aria-label="Chọn thư mục lưu mặc định">
+                  <select value={seriesMode ? "series" : "movie"} onchange={(event) => (seriesMode = event.currentTarget.value === "series")} disabled={!!addingLinkUrl || discoveryAutoTrackLoading}>
+                    <option value="movie">Phim lẻ</option>
+                    <option value="series">Phim bộ</option>
+                  </select>
+                  <span class="material-icons">expand_more</span>
+                </label>
               {/if}
+            </div>
+
+            <div class="discovery-mode-card compact">
+              <span class="mode-card-icon"><span class="material-icons">{seriesMode ? "video_library" : "movie"}</span></span>
+              <div class="mode-card-copy">
+                <strong>Kiểu tải</strong>
+                <small>{seriesMode ? "Gom các tập vào cùng bộ" : "Tải như phim/file đơn"}</small>
+              </div>
+              <label class="pretty-select" aria-label="Chọn kiểu tải">
+                <select value={seriesMode ? "series" : "movie"} onchange={(event) => (seriesMode = event.currentTarget.value === "series")} disabled={!!addingLinkUrl || discoveryAutoTrackLoading}>
+                  <option value="movie">Phim lẻ</option>
+                  <option value="series">Phim bộ</option>
+                </select>
+                <span class="material-icons">expand_more</span>
+              </label>
+            </div>
+            <div class="series-download-actions split-actions">
+              <button type="button" class="series-autotrack-btn" class:active={discoveryAutoTrackEnabled} disabled={discoveryAutoTrackLoading} onclick={toggleAutoTrackFromDiscovery} title={discoveryAutoTrackEnabled ? "Tắt Auto Track" : "Bật Auto Track"}>
+                <span class="material-icons">sync</span>
+                <span>{discoveryAutoTrackLoading ? "Đang bật..." : discoveryAutoTrackEnabled ? "Đã bật Auto Track" : "Bật Auto Track"}</span>
+              </button>
               <button type="button" class="bulk-download-btn" disabled={!selectedDownloadUrls.length || !!addingLinkUrl} onclick={openSelectedDownloadConfirm}>{addingLinkUrl ? "Đang tải..." : `Tải ${selectedDownloadUrls.length} tập đã chọn`}</button>
             </div>
           </div>
@@ -1678,13 +1740,15 @@
           {#if confirmDownloadLinks.length > 5}<small>+{confirmDownloadLinks.length - 5} tập khác</small>{/if}
         </div>
         <div class="confirm-box"><span>Số tập</span><strong>{confirmDownloadLinks.length}</strong></div>
-        <div class="confirm-box"><span>Chế độ</span><strong>{seriesMode ? "Phim bộ" : "Phim lẻ"}</strong></div>
+        <div class="confirm-box"><span>Kiểu tải</span><strong>{seriesMode ? "Phim bộ" : "Phim lẻ"}</strong></div>
+        <div class="confirm-box"><span>Lưu vào</span><strong>{selectedDownloadCategoryLabel}</strong></div>
       {:else if confirmDownloadLink}
         <div class="confirm-file-list" aria-label="File sẽ download">
           <strong title={confirmDownloadLink.original_name || confirmDownloadLink.name}>{confirmDownloadLink.original_name || confirmDownloadLink.name || "Bản tải FShare"}</strong>
         </div>
         <div class="confirm-box"><span>Dung lượng</span><strong>{formatSize(confirmDownloadLink.size)}</strong></div>
         <div class="confirm-box"><span>Chất lượng</span><strong>{confirmDownloadLink.quality || confirmDownloadLink.resolution || confirmDownloadLink.source || "—"}</strong></div>
+        <div class="confirm-box"><span>Lưu vào</span><strong>{selectedDownloadCategoryLabel}</strong></div>
       {/if}
       <div class="modal-actions">
         <button type="button" onclick={closeDownloadConfirm}>Hủy</button>
@@ -2095,4 +2159,6 @@
 .download-detail{margin:.42rem 0 .08rem 42px!important}
 @media(max-width:720px){.related-downloads{max-height:580px!important}.download-bulk-panel{padding:.48rem!important}.download-toggle-row{grid-template-columns:38px minmax(0,1fr)!important}.download-check .select-box{width:22px!important;height:22px!important}.download-detail{margin:.38rem 0 .08rem 38px!important}.download-toggle{grid-template-columns:minmax(0,1fr) 22px!important}.download-status-badge{display:none!important}}
 
+.download-target-select{display:grid;gap:.35rem;padding:.62rem;border-radius:14px;border:1px solid rgba(248,193,74,.18);background:rgba(248,193,74,.07)}.download-target-select span{color:#aab4c3;font-size:.78rem;font-weight:900}.download-target-select select{min-height:40px;border-radius:12px;border:1px solid rgba(148,163,184,.18);background:rgba(2,6,23,.58);color:#f8fafc;padding:0 .7rem;font-weight:850}
+.discovery-save-card.compact,.discovery-mode-card.compact{display:grid;grid-template-columns:42px minmax(0,1fr) minmax(150px,230px);gap:.72rem;align-items:center;padding:.72rem .78rem;border-radius:20px;border:1px solid rgba(248,193,74,.18);background:linear-gradient(135deg,rgba(248,193,74,.11),rgba(167,139,250,.07));box-shadow:inset 0 1px 0 rgba(255,255,255,.05)}.discovery-mode-card.compact{border-color:rgba(96,165,250,.18);background:linear-gradient(135deg,rgba(59,130,246,.11),rgba(167,139,250,.07))}.save-card-icon,.mode-card-icon{width:42px;height:42px;border-radius:15px;display:grid;place-items:center;background:rgba(2,6,23,.62);border:1px solid rgba(248,193,74,.2);color:#f8c14a}.mode-card-icon{border-color:rgba(96,165,250,.2);color:#93c5fd}.save-card-copy,.mode-card-copy{min-width:0}.save-card-copy strong,.save-card-copy small,.mode-card-copy strong,.mode-card-copy small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.save-card-copy strong,.mode-card-copy strong{color:#fff;font-size:.98rem;font-weight:1000;letter-spacing:-.02em}.save-card-copy small,.mode-card-copy small{margin-top:.1rem;color:#aab4c3;font-size:.76rem}.pretty-select{position:relative;display:block;min-width:0}.pretty-select select{width:100%;min-height:42px;appearance:none;border:1px solid rgba(248,193,74,.22);border-radius:14px;background:linear-gradient(135deg,rgba(2,6,23,.72),rgba(15,23,42,.62));color:#f8fafc;color-scheme:dark;padding:0 2.25rem 0 .82rem;font-weight:950;outline:none;box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}.pretty-select select option{background:#111827;color:#f8fafc;font-weight:850}.pretty-select select option:checked,.pretty-select select option:hover{background:#1f2937;color:#fff}.discovery-mode-card .pretty-select select{border-color:rgba(96,165,250,.22)}.pretty-select select:focus{border-color:rgba(248,193,74,.48);box-shadow:0 0 0 3px rgba(248,193,74,.1)}.discovery-mode-card .pretty-select select:focus{border-color:rgba(96,165,250,.48);box-shadow:0 0 0 3px rgba(96,165,250,.1)}.pretty-select .material-icons{position:absolute;right:.62rem;top:50%;transform:translateY(-50%);font-size:20px;color:#f8c14a;pointer-events:none}.discovery-mode-card .pretty-select .material-icons{color:#93c5fd}.split-actions{grid-template-columns:minmax(0,1fr) minmax(0,1.4fr)}@media(max-width:720px){.discovery-save-card.compact,.discovery-mode-card.compact{grid-template-columns:38px minmax(0,1fr);gap:.62rem}.save-card-icon,.mode-card-icon{width:38px;height:38px}.pretty-select{grid-column:1/-1}.split-actions{grid-template-columns:1fr}}@media(max-width:420px){.save-card-copy small,.mode-card-copy small{display:none}}
 </style>

@@ -8,6 +8,7 @@
   type AppSettings = {
     max_concurrent_downloads: number;
     download_directory: string;
+    host_download_directory: string;
     segments_per_download: number;
     fshare_configured: boolean;
     tmdb_configured: boolean;
@@ -138,6 +139,8 @@
   let fsharePanelOpen = $state(false);
   let downloadAdvancedOpen = $state(false);
   let downloadCategories = $state<DownloadCategory[]>([]);
+  let hostDownloadDirectory = $state("/downloads");
+  let editingCategoryIndex = $state<number | null>(null);
   let categorySaving = $state(false);
   let categoryMessage = $state("");
   let autoTrackIntervalSecs = $state(3600);
@@ -272,6 +275,7 @@
       settings = {
         max_concurrent_downloads: downloadSettings?.max_concurrent ?? appSettings?.downloads?.max_concurrent ?? settings.max_concurrent_downloads,
         download_directory: downloadSettings?.directory ?? appSettings?.downloads?.directory ?? settings.download_directory,
+        host_download_directory: downloadSettings?.host_directory ?? appSettings?.downloads?.host_directory ?? settings.host_download_directory,
         segments_per_download: downloadSettings?.segments_per_download ?? appSettings?.downloads?.segments_per_download ?? settings.segments_per_download,
         fshare_configured: accountList.length > 0,
         tmdb_configured: Boolean(health?.tmdb_configured ?? health?.integrations?.tmdb ?? false),
@@ -280,6 +284,7 @@
       };
       maxConcurrent = settings.max_concurrent_downloads;
       downloadDirectory = settings.download_directory;
+      hostDownloadDirectory = settings.host_download_directory || settings.download_directory;
       segmentsPerDownload = settings.segments_per_download;
       fshareAccountEmail = accountList[0]?.email || "";
       fshareAccountRank = accountList[0]?.rank || "";
@@ -480,9 +485,54 @@
     return `${Number.isInteger(hours) ? hours : hours.toFixed(1)} giờ`;
   }
 
+  function containerPathToNas(path: string): string {
+    const root = downloadDirectory || "/downloads";
+    const nasRoot = hostDownloadDirectory || root;
+    if (!path) return nasRoot;
+    if (path === root) return nasRoot;
+    if (path.startsWith(`${root}/`)) return `${nasRoot}${path.slice(root.length)}`;
+    return path;
+  }
+
+  function nasPathToContainer(path: string): string {
+    const root = downloadDirectory || "/downloads";
+    const nasRoot = hostDownloadDirectory || root;
+    const trimmed = path.trim();
+    if (!trimmed) return root;
+    if (trimmed === nasRoot) return root;
+    if (trimmed.startsWith(`${nasRoot}/`)) return `${root}${trimmed.slice(nasRoot.length)}`;
+    return trimmed;
+  }
+
+  function slugFolderName(label: string): string {
+    return (label || "Thư mục mới")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/đ/g, "d")
+      .replace(/Đ/g, "D")
+      .replace(/[^a-zA-Z0-9]+/g, " ")
+      .trim()
+      .replace(/\s+/g, " ") || "Thu muc moi";
+  }
+
+  function categoryPathForLabel(label: string): string {
+    return `${downloadDirectory || "/downloads"}/${slugFolderName(label)}`;
+  }
+
+  function folderNameFromPath(path: string): string {
+    return (path || "").split("/").filter(Boolean).pop() || "";
+  }
+
+  function shouldAutoRenameCategoryPath(item: DownloadCategory): boolean {
+    const folder = folderNameFromPath(item.path);
+    const labelFolder = slugFolderName(item.label);
+    return !folder || folder === "New Folder" || folder === "Thu muc moi" || folder === labelFolder;
+  }
+
   function addDownloadCategory() {
-    const index = downloadCategories.length + 1;
-    downloadCategories = [...downloadCategories, { id: `custom-${index}`, label: "Thư mục mới", path: `${downloadDirectory || "/downloads"}/New Folder` }];
+    const label = "Thư mục mới";
+    downloadCategories = [...downloadCategories, { id: `custom-${downloadCategories.length + 1}`, label, path: categoryPathForLabel(label) }];
+    editingCategoryIndex = downloadCategories.length - 1;
     categoryMessage = "";
   }
 
@@ -492,7 +542,14 @@
   }
 
   function updateDownloadCategory(index: number, field: keyof DownloadCategory, value: string) {
-    downloadCategories = downloadCategories.map((item, i) => i === index ? { ...item, [field]: value } : item);
+    downloadCategories = downloadCategories.map((item, i) => {
+      if (i !== index) return item;
+      if (field === "label") {
+        const next = { ...item, label: value };
+        return shouldAutoRenameCategoryPath(item) ? { ...next, path: categoryPathForLabel(value) } : next;
+      }
+      return { ...item, [field]: value };
+    });
     categoryMessage = "";
   }
 
@@ -730,6 +787,7 @@
       <article class="panel wide ui-mode-panel">{@render UiModePanel()}</article>
       <article class="panel wide fshare-overview-panel">{@render ServicePanel()}</article>
       <article class="panel download-overview-panel">{@render DownloadPanel()}</article>
+      <article class="panel download-categories-panel">{@render DownloadCategoriesPanel()}</article>
       <article class="panel autotrack-overview-panel">{@render AutoTrackPanel()}</article>
     {:else if activeTab === "accounts"}
       <article class="panel users-panel">{@render UsersPanel()}</article>
@@ -809,12 +867,25 @@
       </div>
       <button type="button" class="ghost-mini" onclick={addDownloadCategory}><span class="material-icons">add</span>Thêm</button>
     </div>
-    <div class="category-list">
+    <div class="category-list compact-category-list">
       {#each downloadCategories as item, index}
-        <div class="category-row">
-          <label><span>Tên</span><input value={item.label} oninput={(event) => updateDownloadCategory(index, "label", event.currentTarget.value)} /></label>
-          <label><span>Đường dẫn</span><input value={item.path} oninput={(event) => updateDownloadCategory(index, "path", event.currentTarget.value)} placeholder="/downloads/Movies" /></label>
-          <button type="button" class="icon-danger" onclick={() => removeDownloadCategory(index)} aria-label="Xóa thư mục"><span class="material-icons">delete</span></button>
+        <div class="category-card" class:editing={editingCategoryIndex === index}>
+          <div class="category-summary">
+            <div>
+              <strong>{item.label}</strong>
+              <small>{containerPathToNas(item.path)}</small>
+            </div>
+            <button type="button" class="ghost-mini edit-category" onclick={() => editingCategoryIndex = editingCategoryIndex === index ? null : index}>
+              <span class="material-icons">edit</span>{editingCategoryIndex === index ? "Xong" : "Sửa"}
+            </button>
+          </div>
+          {#if editingCategoryIndex === index}
+            <div class="category-edit-fields">
+              <label><span>Tên</span><input value={item.label} oninput={(event) => updateDownloadCategory(index, "label", event.currentTarget.value)} /></label>
+              <label><span>Đường dẫn trên NAS</span><input value={containerPathToNas(item.path)} oninput={(event) => updateDownloadCategory(index, "path", nasPathToContainer(event.currentTarget.value))} placeholder={`${hostDownloadDirectory || downloadDirectory}/Movies`} /></label>
+              <button type="button" class="icon-danger" onclick={() => removeDownloadCategory(index)} aria-label="Xóa thư mục"><span class="material-icons">delete</span>Xóa mục</button>
+            </div>
+          {/if}
         </div>
       {/each}
     </div>
@@ -1379,4 +1450,6 @@
   .category-manager{display:grid;gap:.8rem;margin-top:.9rem;padding:.9rem;border-radius:18px;background:rgba(255,255,255,.045);border:1px solid rgba(148,163,184,.14)}
   .category-head{display:flex;justify-content:space-between;gap:.8rem;align-items:flex-start}.category-head strong{display:block;color:#fff}.category-head small{display:block;margin-top:.25rem;color:#aab4c3;line-height:1.35}.ghost-mini{min-height:34px;padding:0 .7rem;border-radius:999px;background:rgba(255,255,255,.07);border:1px solid rgba(148,163,184,.16);color:#f8fafc;font-weight:850;display:inline-flex;align-items:center;gap:.35rem}.ghost-mini .material-icons{font-size:17px}.category-list{display:grid;gap:.55rem}.category-row{display:grid;grid-template-columns:minmax(120px,.8fr) minmax(180px,1.4fr) 38px;gap:.55rem;align-items:end}.category-row label{display:grid;gap:.25rem}.category-row label span{font-size:.72rem;color:#aab4c3;font-weight:850}.category-row input{min-height:38px;border-radius:12px;border:1px solid rgba(148,163,184,.18);background:rgba(2,6,23,.38);color:#f8fafc;padding:0 .7rem}.icon-danger{width:38px;height:38px;min-height:38px;padding:0;border-radius:12px;border:1px solid rgba(248,113,113,.22);background:rgba(248,113,113,.11);color:#fecaca}.icon-danger .material-icons{font-size:18px}.category-actions{display:flex;gap:.7rem;align-items:center;flex-wrap:wrap}@media(max-width:720px){.category-row{grid-template-columns:1fr}.icon-danger{width:100%}}
   .standalone-category-manager{margin-top:0;background:rgba(15,23,42,.34)}
+
+  .compact-category-list{gap:.55rem}.category-card{display:grid;gap:.55rem;padding:.72rem;border-radius:16px;border:1px solid rgba(148,163,184,.13);background:rgba(2,6,23,.28)}.category-card.editing{border-color:rgba(167,139,250,.28);background:rgba(124,58,237,.1)}.category-summary{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.65rem;align-items:center}.category-summary strong,.category-summary small{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.category-summary strong{color:#fff;font-size:.98rem}.category-summary small{margin-top:.18rem;color:#aab4c3;font-size:.82rem}.edit-category{min-height:34px}.edit-category .material-icons{font-size:16px}.category-edit-fields{display:grid;gap:.55rem;padding-top:.55rem;border-top:1px solid rgba(148,163,184,.12)}.category-edit-fields label{display:grid;gap:.25rem}.category-edit-fields label span{font-size:.72rem;color:#aab4c3;font-weight:850}.category-edit-fields input{min-height:38px;border-radius:12px;border:1px solid rgba(148,163,184,.18);background:rgba(2,6,23,.5);color:#f8fafc;padding:0 .7rem}.category-edit-fields .icon-danger{width:100%;display:inline-flex;align-items:center;justify-content:center;gap:.4rem}
 </style>

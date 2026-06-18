@@ -24,6 +24,8 @@ services:
       - TZ=Asia/Ho_Chi_Minh
       - FHUB_APPDATA_DIR=/appData
       - FHUB_DOWNLOADS_DIR=/downloads
+      # Đường dẫn thật trên NAS/host để UI hiển thị cho admin; đổi cùng vế trái volume ở trên.
+      - FHUB_HOST_DOWNLOADS_DIR=/volume1/Video
       - FHUB_SEGMENTS_PER_DOWNLOAD=16
       - FHUB_MAX_CONCURRENT=4
       - RUST_LOG=fhub=info,tower_http=info

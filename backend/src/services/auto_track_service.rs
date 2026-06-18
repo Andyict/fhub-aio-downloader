@@ -167,7 +167,7 @@ impl AutoTrackService {
                 Some(batch_id.clone()),
                 Some(batch_name.clone()),
                 Some(track.title.clone()),
-                None,
+                track.download_folder.clone(),
             ).await {
                 Ok(task) => {
                     item.status = "queued".to_string();

@@ -38,6 +38,8 @@ struct ServerSettings {
 #[derive(Serialize, Deserialize)]
 struct DownloadsSettings {
     directory: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    host_directory: Option<String>,
     max_concurrent: usize,
     segments_per_download: u32,
 }
@@ -83,8 +85,13 @@ struct UpdateSettingsRequest {
     downloads: Option<DownloadsSettings>,
 }
 
+fn host_downloads_dir() -> Option<String> {
+    std::env::var("FHUB_HOST_DOWNLOADS_DIR").ok().filter(|value| !value.trim().is_empty())
+}
+
 async fn get_settings(State(state): State<Arc<AppState>>) -> Json<SettingsResponse> {
     let config = &state.config;
+    let host_directory = host_downloads_dir();
     Json(SettingsResponse {
         server: ServerSettings {
             host: config.server.host.clone(),
@@ -92,6 +99,7 @@ async fn get_settings(State(state): State<Arc<AppState>>) -> Json<SettingsRespon
         },
         downloads: DownloadsSettings {
             directory: config.downloads.directory.to_string_lossy().to_string(),
+            host_directory,
             max_concurrent: config.downloads.max_concurrent,
             segments_per_download: config.downloads.segments_per_download,
         },
@@ -120,6 +128,7 @@ async fn get_downloads_settings(State(state): State<Arc<AppState>>) -> Json<Down
     let config = state.download_orchestrator.get_config().await;
     Json(DownloadsSettings {
         directory: config.download_dir.to_string_lossy().to_string(),
+        host_directory: host_downloads_dir(),
         max_concurrent: config.max_concurrent,
         segments_per_download: config.segments_per_download as u32,
     })

@@ -302,65 +302,13 @@ impl DownloadOrchestrator {
             }
         }
         
-        // Create FHub compatible filename if TMDB metadata exists
-        let mut final_filename = if let Some(mut meta) = tmdb_metadata.clone() {
-            // Extract file extension from original filename
-            let extension = std::path::Path::new(&filename)
-                .extension()
-                .and_then(|e| e.to_str())
-                .unwrap_or("mkv");
-            
-            // For TV shows: Always create clean filename if we have season/episode
-            if let (Some(season), Some(episode)) = (meta.season, meta.episode) {
-                // Fetch title from TMDB if missing
-                let title = if meta.title.is_none() {
-                    if let Some(tmdb_id) = &meta.tmdb_id {
-                        let media_type = meta.media_type.as_deref().unwrap_or("tv");
-                        tracing::info!("Fetching TMDB title for ID: {}, type: {}", tmdb_id, media_type);
-                        let fetched_title = crate::api::indexer::fetch_tmdb_title(&tmdb_id.to_string(), media_type).await;
-                        if let Some(ref t) = fetched_title {
-                            tracing::info!("Fetched TMDB title: {}", t);
-                            meta.title = fetched_title.clone();
-                        }
-                        fetched_title
-                    } else {
-                        None
-                    }
-                } else {
-                    meta.title.clone()
-                };
-                
-                // Create clean filename: "Series - S##E##.ext"
-                if let Some(title_str) = title {
-                    let clean_filename = format!("{} - S{:02}E{:02}.{}", title_str, season, episode, extension);
-                    tracing::info!("Generated clean filename: {} (from: {})", clean_filename, filename);
-                    
-                    // Update tmdb_metadata with fetched title for folder organization
-                    if let Some(ref mut original_meta) = tmdb_metadata {
-                        original_meta.title = Some(title_str);
-                    }
-                    
-                    clean_filename
-                } else {
-                    tracing::warn!("Could not fetch TMDB title, using original filename: {}", filename);
-                    filename.clone()
-                }
-            }
-            // For movies: Create clean filename if we have title
-            else if let Some(ref title) = meta.title {
-                let clean_filename = if let Some(year) = meta.year {
-                    format!("{} ({}).{}", title, year, extension)
-                } else {
-                    format!("{}.{}", title, extension)
-                };
-                tracing::info!("Generated clean movie filename: {} (from: {})", clean_filename, filename);
-                clean_filename
-            } else {
-                filename.clone()
-            }
-        } else {
-            filename.clone()
-        };
+        // Preserve the original upstream filename on disk.
+        // TMDB metadata is still used for routing/grouping/display, but the physical
+        // file keeps codec/source/release-group details from FShare.
+        let mut final_filename = filename.clone();
+        if tmdb_metadata.is_some() {
+            tracing::info!("Preserving original filename: {}", final_filename);
+        }
         
         let inferred_series_folder = if tmdb_metadata.is_none() && folder_name.is_none() && category == "tv" {
             let parsed = FilenameParser::parse(&filename);
