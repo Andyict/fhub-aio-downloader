@@ -136,7 +136,7 @@
   let overviewExpanded = $state(false);
   let heroSlideIndex = $state(0);
   let heroSlideTimer: number | null = null;
-  let posterGridColumns = $state(5);
+  let posterGridColumns = $state(6);
 
   const mediaType = $derived(activeType === "TV" || activeType === "Film bộ" ? "tv" : "movie");
   const isTvSeriesSource = $derived(activeType === "Film bộ");
@@ -150,7 +150,7 @@
   onMount(() => {
     syncLanguage();
     const syncPosterGridColumns = () => {
-      posterGridColumns = window.matchMedia("(max-width: 720px)").matches ? 3 : window.matchMedia("(max-width: 1360px)").matches ? 4 : 5;
+      posterGridColumns = window.matchMedia("(max-width: 720px)").matches ? 3 : window.matchMedia("(max-width: 1360px)").matches ? 5 : 6;
     };
     syncPosterGridColumns();
     window.addEventListener("resize", syncPosterGridColumns);
@@ -1655,51 +1655,6 @@
       </section>
     </div>
 
-    <aside class="side-column">
-      <section class="panel chips-panel">
-        <div class="row-head">
-          <div>
-            <span class="eyebrow">Lịch sử</span>
-            <h2>Tìm gần đây</h2>
-          </div>
-          <button type="button" onclick={() => { recent = []; message = "Đã xóa tìm kiếm gần đây."; }}>Xóa</button>
-        </div>
-        <div class="chips">
-          {#if recent.length}
-            {#each recent as item}
-              <button type="button" onclick={() => routeSearchValue(item)}>{item}</button>
-            {/each}
-          {:else}
-            <small>Chưa có tìm kiếm gần đây.</small>
-          {/if}
-        </div>
-      </section>
-
-      <section class="panel top-search">
-        <div class="row-head">
-          <div>
-            <span class="eyebrow">FShare Trending</span>
-            <h2>Đang hot</h2>
-          </div>
-        </div>
-        {#if trending.length}
-          {#each trending.slice(0, 4) as item, index}
-            <button type="button" onclick={() => openMovie(item)}>
-              <b>{index + 1}</b>
-              <img src={item.img || fallbackPoster} alt={item.title} />
-              <div>
-                <strong>{item.title}</strong>
-                <small>{item.year ? `${item.year} · ` : ""}{item.seed || "FShare"}</small>
-              </div>
-              <span class="material-icons">chevron_right</span>
-            </button>
-          {/each}
-        {:else}
-          <p class="empty-state">Chưa tải được trending FShare.</p>
-        {/if}
-      </section>
-
-    </aside>
   </section>
 </div>
 
@@ -2031,12 +1986,12 @@
     }
   }
 
-  .discover-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 340px); min-width: 0; gap: 1rem; align-items: start; }
+  .discover-layout { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; gap: 1rem; align-items: start; }
   .main-column, .side-column { display: grid; gap: 1rem; min-width: 0; }
   .panel { border-radius: 22px; padding: 1rem; }
   .row-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 0.9rem; }
   .row-head a, .row-head button { color: #f8c14a; border: 0; background: transparent; font-weight: 900; text-decoration: none; }
-  .poster-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); min-width: 0; gap: 0.85rem; }
+  .poster-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); min-width: 0; gap: 0.85rem; }
   .poster-card { position: relative; min-height: 272px; overflow: hidden; border: 1px solid rgba(148, 163, 184, 0.14); border-radius: 18px; background: #111827; text-align: left; transition: transform 0.18s ease, border-color 0.18s ease; }
   .poster-card:hover { transform: translateY(-3px); border-color: rgba(248, 193, 74, 0.34); }
   .poster-card img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
@@ -2065,7 +2020,7 @@
   .queue-meter { display: flex; align-items: end; gap: 0.55rem; margin: 0.8rem 0; }
   .queue-meter strong { color: #fff; font-size: 3.1rem; line-height: 0.9; letter-spacing: -0.06em; }
   .queue-meter span { color: rgba(226, 232, 240, 0.65); font-weight: 850; }
-  @media (max-width: 1360px) and (min-width: 721px) { .discover-layout { grid-template-columns: minmax(0, 1fr) 220px; gap: .72rem; } .poster-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .68rem; } .poster-card { min-height: clamp(250px, 25vw, 320px); border-radius: 16px; } .poster-copy { left: .68rem; right: .68rem; bottom: .68rem; } .poster-copy strong { font-size: .88rem; } .poster-copy small, .poster-copy em { font-size: .68rem; } .side-column { gap: .65rem; } .side-column .panel { padding: .65rem; border-radius: 18px; } .side-column .row-head { align-items: center; gap: .35rem; margin-bottom: .45rem; } .side-column .eyebrow { display: none; } .side-column h2 { font-size: 1rem; letter-spacing: -.03em; } .chips { gap: .35rem; max-height: 78px; overflow: hidden; } .chips button { min-height: 28px; max-width: 100%; padding: 0 .52rem; font-size: .68rem; } .top-search { gap: .42rem; } .top-search > button { grid-template-columns: 20px 42px minmax(0, 1fr); min-height: 52px; gap: .42rem; padding: .38rem; border-radius: 13px; } .top-search > button > .material-icons { display: none; } .top-search img { width: 42px; height: 42px; border-radius: 10px; } .top-search b { font-size: .75rem; } .top-search strong { font-size: .78rem; } .top-search small { font-size: .64rem; } }
+  @media (max-width: 1360px) and (min-width: 721px) { .discover-layout { grid-template-columns: minmax(0, 1fr); gap: .72rem; } .poster-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .68rem; } .poster-card { min-height: clamp(250px, 25vw, 320px); border-radius: 16px; } .poster-copy { left: .68rem; right: .68rem; bottom: .68rem; } .poster-copy strong { font-size: .88rem; } .poster-copy small, .poster-copy em { font-size: .68rem; } .side-column { gap: .65rem; } .side-column .panel { padding: .65rem; border-radius: 18px; } .side-column .row-head { align-items: center; gap: .35rem; margin-bottom: .45rem; } .side-column .eyebrow { display: none; } .side-column h2 { font-size: 1rem; letter-spacing: -.03em; } .chips { gap: .35rem; max-height: 78px; overflow: hidden; } .chips button { min-height: 28px; max-width: 100%; padding: 0 .52rem; font-size: .68rem; } .top-search { gap: .42rem; } .top-search > button { grid-template-columns: 20px 42px minmax(0, 1fr); min-height: 52px; gap: .42rem; padding: .38rem; border-radius: 13px; } .top-search > button > .material-icons { display: none; } .top-search img { width: 42px; height: 42px; border-radius: 10px; } .top-search b { font-size: .75rem; } .top-search strong { font-size: .78rem; } .top-search small { font-size: .64rem; } }
   @media (max-width: 1120px) { .discover-hero { height: clamp(420px, 48vw, 500px); } .hero-wide-media img, .hero-wide-media::before { width: 78%; } .hero-info-card { left: 42%; right: 2rem; max-width: 560px; } .discover-layout { grid-template-columns: 1fr; } .side-column { display: none; } .poster-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
   @media (max-width: 720px) { .discover-screen { gap: 0.5rem; max-width: 100%; } .discover-hero { height: clamp(390px, 112vw, 470px); padding: .48rem; border-radius: 18px; box-shadow: none; } .hero-wide-media { inset: .48rem; overflow: hidden; border-radius: 16px; background: #050816; } .hero-wide-media::before { display: none; } .hero-wide-media::after { display: block; inset: 0; border-radius: 16px; background: linear-gradient(180deg, rgba(5,8,17,0) 0%, rgba(5,8,17,.04) 46%, rgba(5,8,17,.54) 73%, rgba(5,8,17,.96) 100%); } .hero-wide-media img { width: 100%; height: 100%; border-radius: 16px; object-fit: cover; object-position: center; filter: none; -webkit-mask-image: none; mask-image: none; box-shadow: none; } .hero-info-card { left: .78rem; right: .78rem; top: auto; bottom: .78rem; z-index: 3; max-width: none; display: grid; grid-template-columns: 1fr auto; grid-template-areas: "meta action"; align-items: end; gap: .58rem; transform: none; } .hero-info-card p { display: none; } .hero-dots { display: none; } .hero-open-action { grid-area: action; align-self: end; margin-top: 0; padding: .74rem .86rem; border-radius: 14px; font-size: .78rem; white-space: nowrap; box-shadow: 0 12px 28px rgba(0,0,0,.34), 0 10px 24px rgba(248,193,74,.16); } .hero-meta { grid-area: meta; max-width: none; gap: .34rem; margin-top: 0; align-self: end; } .hero-meta span { padding: .34rem .52rem; font-size: .68rem; background: rgba(8,12,24,.72); backdrop-filter: blur(10px); } .hero-copy { display: block; } .eyebrow, h1, .hero-copy p { display: none; } .search-box { min-height: 46px; grid-template-columns: 18px minmax(0, 1fr) 34px; gap: .45rem; margin-top: 0; padding: 0 .42rem 0 .72rem; border-radius: 14px; } .search-box input { font-size: .9rem; } .search-box button { width: 34px; height: 34px; border-radius: 11px; } .search-box .material-icons { font-size: 1.25rem; } .discovery-controls { gap: .45rem; } .type-switch { grid-template-columns: repeat(3, minmax(0, 1fr)); padding: .28rem; border-radius: 18px; } .type-switch button { min-height: 42px; grid-template-columns: minmax(0,1fr) 28px; padding: 0 .6rem; border-radius: 14px; } .type-switch strong { font-size: .98rem; } .type-switch .material-icons { width: 28px; height: 28px; border-radius: 9px; font-size: 1rem; } .filter-card { padding: .45rem; border-radius: 14px; } .filter-section { gap: 0; } .filter-label { display: none; } .filter-options { gap: .34rem; } .filter-options button { min-height: 34px; padding: 0 .64rem; font-size: .76rem; } .film-info-panel { gap: .72rem; padding: .75rem; border-radius: 18px; } .film-main-info { grid-template-columns: 1fr; gap: .72rem; } .film-hero-carousel { height: 280px; min-height: 0; border-radius: 16px; } .film-extra-grid { grid-template-columns: 1fr; gap: .65rem; } .cast-strip, .related-films, .related-downloads { padding: .65rem; border-radius: 16px; } .cast-card { flex-basis: 78px; } .cast-card img { width: 64px; height: 64px; } .related-film-list button { flex-basis: 116px; } .related-film-list img { height: 134px; } .download-toggle { grid-template-columns: 30px minmax(0,1fr) auto 24px !important; padding: .6rem !important; gap: .5rem !important; } .download-status-badge { font-size: .6rem; padding: .18rem .34rem; } .download-detail { padding: .56rem; } .film-info-head h2 { font-size: 1.25rem; } .film-info-head button { width: 34px; height: 34px; border-radius: 12px; } .film-info-copy p { font-size: .84rem; line-height: 1.45; } .overview-block p { -webkit-line-clamp: 4; } .overview-toggle { font-size: .8rem; } .overview-block:not(.expanded) .overview-toggle { padding-left: 1.8rem; } .film-meta span { font-size: .72rem; padding: .28rem .48rem; } .film-actions button, .film-actions a { min-height: 36px; border-radius: 12px; font-size: .82rem; } .panel { padding: 0.62rem; border-radius: 16px; } .row-head { margin-bottom: .55rem; } .poster-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.45rem; } .poster-card { min-height: 184px; border-radius: 12px; } .poster-copy { left: .5rem; right: .5rem; bottom: .5rem; gap: .14rem; } .poster-copy strong { font-size: 0.76rem; line-height: 1.1; } .poster-copy small, .poster-copy em { font-size: 0.62rem; line-height: 1.15; } .side-column { display: none; } }
   @media (max-width: 420px) { .film-hero-carousel { display: block; height: 235px; } .poster-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } .poster-card { min-height: 174px; } .poster-copy { left: .45rem; right: .45rem; bottom: .45rem; } }

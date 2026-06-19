@@ -5,7 +5,7 @@
 
 use std::path::{Path, PathBuf};
 use std::time::Instant;
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::process::Command;
 use tokio::time::{sleep, Duration};
 use tokio_util::sync::CancellationToken;
@@ -109,6 +109,10 @@ impl SimpleDownloadEngine {
             0
         };
 
+        if initial_bytes > 0 {
+            anyhow::bail!("existing partial file present; using single-stream resume to avoid deleting partial data");
+        }
+
         let head = self.http_client.head(url).send().await?;
         if !head.status().is_success() {
             anyhow::bail!("HEAD failed for multi-range path: {}", head.status());
@@ -135,10 +139,12 @@ impl SimpleDownloadEngine {
         let parts_dir = dir.join(format!(".{}.parts", out));
         let segments = self.config.segments_per_download.clamp(1, 32);
         let chunk_size = total_size.div_ceil(segments as u64);
+        let max_parallel_parts = 4usize;
 
         tracing::info!(
-            "Custom multi-range tuned for Fshare: segments={}, dir={:?}, out={}",
+            "Custom multi-range tuned for Fshare: segments={}, parallel_parts={}, dir={:?}, out={}",
             segments,
+            max_parallel_parts,
             dir,
             out
         );
@@ -146,10 +152,15 @@ impl SimpleDownloadEngine {
         tokio::fs::create_dir_all(&parts_dir).await?;
         let _ = tokio::fs::remove_file(destination).await;
 
-        let mut script = String::from("set -eu\n");
+        let mut script = String::from("set -u\n");
         script.push_str("rm -f \"$DEST\"\n");
-        script.push_str("rm -f \"$PARTS_DIR\"/part-* \"$PARTS_DIR\"/part-*.partial 2>/dev/null || true\n");
+        script.push_str("rm -f \"$PARTS_DIR\"/part-* \"$PARTS_DIR\"/part-*.partial \"$PARTS_DIR\"/part-*.log 2>/dev/null || true\n");
+        script.push_str("FAIL=0\n");
         script.push_str("PIDS=\"\"\n");
+        script.push_str("wait_batch() {\n");
+        script.push_str("  for PID in $PIDS; do\n    if ! wait \"$PID\"; then FAIL=1; fi\n  done\n");
+        script.push_str("  PIDS=\"\"\n");
+        script.push_str("}\n");
         for i in 0..segments {
             let start = i as u64 * chunk_size;
             if start >= total_size {
@@ -158,13 +169,16 @@ impl SimpleDownloadEngine {
             let end = ((i as u64 + 1) * chunk_size).saturating_sub(1).min(total_size.saturating_sub(1));
             let expected = end.saturating_sub(start).saturating_add(1);
             script.push_str(&format!(
-                "(curl -L --fail --silent --show-error --retry 5 --retry-delay 2 --retry-all-errors --connect-timeout 30 --range {start}-{end} -o \"$PARTS_DIR/part-{i:02}.partial\" \"$URL\" && test \"$(stat -c %s \"$PARTS_DIR/part-{i:02}.partial\")\" -eq {expected} && mv \"$PARTS_DIR/part-{i:02}.partial\" \"$PARTS_DIR/part-{i:02}\") &\n"
+                "(curl --http1.1 -L --fail --silent --show-error --retry 8 --retry-delay 2 --retry-all-errors --connect-timeout 30 --max-time 0 -A \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36\" --range {start}-{end} -o \"$PARTS_DIR/part-{i:02}.partial\" \"$URL\" >\"$PARTS_DIR/part-{i:02}.log\" 2>&1 && test \"$(stat -c %s \"$PARTS_DIR/part-{i:02}.partial\")\" -eq {expected} && mv \"$PARTS_DIR/part-{i:02}.partial\" \"$PARTS_DIR/part-{i:02}\") &\n"
             ));
             script.push_str("PIDS=\"$PIDS $!\"\n");
+            if (i + 1) % max_parallel_parts == 0 {
+                script.push_str("wait_batch\n");
+                script.push_str("test \"$FAIL\" -eq 0 || { echo \"multi-range batch failed\" >&2; for f in \"$PARTS_DIR\"/part-*.log; do echo \"--- $f ---\" >&2; tail -20 \"$f\" >&2; done; exit 1; }\n");
+            }
         }
-        script.push_str("FAIL=0\n");
-        script.push_str("for PID in $PIDS; do\n  if ! wait \"$PID\"; then FAIL=1; fi\ndone\n");
-        script.push_str("test \"$FAIL\" -eq 0\n");
+        script.push_str("wait_batch\n");
+        script.push_str("test \"$FAIL\" -eq 0 || { echo \"multi-range batch failed\" >&2; for f in \"$PARTS_DIR\"/part-*.log; do echo \"--- $f ---\" >&2; tail -20 \"$f\" >&2; done; exit 1; }\n");
         script.push_str("");
         for i in 0..segments {
             let start = i as u64 * chunk_size;
@@ -207,7 +221,11 @@ impl SimpleDownloadEngine {
 
             if let Some(status) = child.try_wait()? {
                 if !status.success() {
-                    anyhow::bail!("multi-range exited with status {}", status);
+                    let mut stderr = String::new();
+                    if let Some(mut pipe) = child.stderr.take() {
+                        let _ = pipe.read_to_string(&mut stderr).await;
+                    }
+                    anyhow::bail!("multi-range exited with status {}: {}", status, stderr.trim());
                 }
                 break;
             }
