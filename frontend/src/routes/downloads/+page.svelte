@@ -10,6 +10,8 @@
     tmdb_title?: string;
     season?: number;
     episode?: number;
+    tmdb_season?: number;
+    tmdb_episode?: number;
     tmdb_id?: number | string;
     media_type?: string;
     category?: string;
@@ -556,8 +558,8 @@
     const filename = task.filename || task.name || "";
     const baseTitle = task.tmdb_title || task.batch_name || task.title || filename || task.url || "FHUB Download";
     const parsedEpisode = parseEpisodeMeta(filename || baseTitle);
-    const season = Number(task.season || parsedEpisode.season || 0) || undefined;
-    const episode = Number(task.episode || parsedEpisode.episode || 0) || undefined;
+    const season = Number(task.tmdb_season || task.season || parsedEpisode.season || 0) || undefined;
+    const episode = Number(task.tmdb_episode || task.episode || parsedEpisode.episode || 0) || undefined;
     const episodeLabel = episodeDisplayLabel(season, episode, filename || baseTitle);
     const title = baseTitle;
     const id = String(task.id ?? task.url ?? `${title}-${index}`);

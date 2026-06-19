@@ -260,13 +260,24 @@ impl DownloadOrchestrator {
         }
         
         // Fetch real filename and size from Fshare API.
-        // Even when the frontend supplies a display filename, still try to fetch file size
-        // so progress/speed and segmented downloads are initialized correctly.
+        // IMPORTANT: the filename sent by UI/SAB/auto-track is only a display/fallback
+        // hint. When Fshare metadata is available, always keep the upstream filename on
+        // disk so downloads are not renamed to movie titles, episode labels, or other
+        // UI-generated names.
         let (filename, file_size) = if let Some(handler) = self.host_registry.get_handler(&host) {
             match tokio::time::timeout(std::time::Duration::from_secs(12), handler.get_file_info(&url)).await {
                 Ok(Ok(file_info)) => {
-                    tracing::info!("Fetched file info from API: name='{}', size={}", file_info.filename, file_info.size);
-                    (filename_override.clone().unwrap_or(file_info.filename), file_info.size)
+                    if let Some(ref override_name) = filename_override {
+                        tracing::info!(
+                            "Fetched file info from API: name='{}', size={} (ignoring filename override='{}')",
+                            file_info.filename,
+                            file_info.size,
+                            override_name
+                        );
+                    } else {
+                        tracing::info!("Fetched file info from API: name='{}', size={}", file_info.filename, file_info.size);
+                    }
+                    (file_info.filename, file_info.size)
                 }
                 Ok(Err(e)) => {
                     tracing::warn!("Failed to get file info from API, using fallback: {}", e);
