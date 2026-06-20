@@ -75,6 +75,7 @@
   type LinkPreview = {
     original_url: string;
     resolved_url: string;
+    folder_code?: string;
     folder_name?: string;
     file_count?: number;
     total_size?: number;

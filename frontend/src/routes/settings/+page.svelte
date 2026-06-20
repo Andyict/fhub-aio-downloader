@@ -120,6 +120,7 @@
   let settings = $state<AppSettings>({
     max_concurrent_downloads: 8,
     download_directory: "/downloads",
+    host_download_directory: "/downloads",
     segments_per_download: 8,
     fshare_configured: false,
     tmdb_configured: false,

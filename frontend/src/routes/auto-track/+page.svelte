@@ -288,7 +288,7 @@
       if (!item.auto_queued || !hasDownloadTask || !downloadableStatuses.has(status)) return [];
       const at = item.completed_at || item.queued_at || item.first_seen_at || "";
       if (!at) return [];
-      return [{ track: detail, item, at, kind: "download" as const, status: item.completed_at ? text.downloaded : itemStatusLabel(item) }];
+      return [{ track: detail, item, at, status: item.completed_at ? text.downloaded : itemStatusLabel(item) }];
     }));
     const min = new Date();
     min.setDate(min.getDate() - 6);
@@ -462,7 +462,7 @@
     {#if activityOpen}
     <div class="recent-list">
       {#each selectedActivityEvents() as event}
-        <div class="recent-item" class:tracked={event.kind === "tracked"}>
+        <div class="recent-item">
           <span class="material-icons">download_done</span>
           <div>
             <strong>{event.track.title} · {episodeName(event.item)}</strong>
