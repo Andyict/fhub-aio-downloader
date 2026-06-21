@@ -31,6 +31,7 @@ pub fn router() -> Router<Arc<AppState>> {
         .route("/available-on-fshare", get(available_on_fshare))
         .route("/resolve-source-link", get(resolve_source_link))
         .route("/trending", get(trending))
+        .route("/thuviencine-movies", get(thuviencine_movies))
         .route("/thuviencine-tv", get(thuviencine_tv_series))
 }
 
@@ -400,17 +401,21 @@ async fn smart_search(
         queries.push(format!("{} S{:02}", payload.title, s));
     }
 
-    // 2. Multi-Search TimFshare, then fallback to Thư Viện Cine when TimFshare is down/empty
-    let mut all_raw_results = Vec::new();
-    for query in &queries {
-        all_raw_results.extend(search_timfshare(&client, query).await);
-    }
-
-    let thuviencine_fallback = if all_raw_results.is_empty() {
+    // 2. Prefer Thư Viện Cine for movie searches because TimFshare can be slow/unresponsive.
+    //    Keep TimFshare as fallback, and keep TV searches on TimFshare first for season/episode matching.
+    let prefer_thuviencine = payload.media_type != "tv";
+    let mut thuviencine_results = if prefer_thuviencine {
         search_thuviencine(&client, &payload.title).await
     } else {
         Vec::new()
     };
+
+    let mut all_raw_results = Vec::new();
+    if !prefer_thuviencine || thuviencine_results.is_empty() {
+        for query in &queries {
+            all_raw_results.extend(search_timfshare(&client, query).await);
+        }
+    }
 
     // 3. Parse and Filter
     let mut filtered_results = Vec::new();
@@ -484,8 +489,8 @@ async fn smart_search(
         });
     }
 
-    if filtered_results.is_empty() && !thuviencine_fallback.is_empty() {
-        filtered_results.extend(thuviencine_fallback);
+    if filtered_results.is_empty() && !thuviencine_results.is_empty() {
+        filtered_results.extend(thuviencine_results);
     }
 
     // Sort by score desc
@@ -748,7 +753,7 @@ fn extract_year_from_title(title: &str) -> Option<String> {
         .and_then(|re| re.find(title).map(|m| m.as_str().trim_matches(['(', ')']).to_string()))
 }
 
-fn clean_tv_title(title: &str) -> String {
+fn clean_thuviencine_title(title: &str) -> String {
     let decoded = decode_html_entities(title);
     let no_year = Regex::new(r"\s*\((19|20)\d{2}(?:\s*-\s*(?:19|20)\d{2})?\)\s*$")
         .ok()
@@ -766,6 +771,92 @@ fn clean_tv_title(title: &str) -> String {
         .unwrap_or_else(|| preferred.to_string())
         .trim()
         .to_string()
+}
+
+fn clean_tv_title(title: &str) -> String {
+    clean_thuviencine_title(title)
+}
+
+async fn enrich_thuviencine_items_with_tmdb(results: &mut Vec<TrendingItem>, media_type: &str, client: &Client) {
+    let mut tasks = Vec::new();
+    for item in results.iter() {
+        let title = extract_core_title(&item.name);
+        let year = item.year.clone();
+        let client = client.clone();
+        let media_type = media_type.to_string();
+        tasks.push(tokio::spawn(async move {
+            let date_param = if media_type == "tv" { "first_air_date_year" } else { "year" };
+            let mut url = format!("https://api.themoviedb.org/3/search/{}?api_key={}&query={}", media_type, TMDB_API_KEY, urlencoding::encode(&title));
+            if let Some(y) = &year { url.push_str(&format!("&{}={}", date_param, y)); }
+            if let Ok(resp) = client.get(&url).send().await {
+                if let Ok(data) = resp.json::<Value>().await {
+                    return data["results"].as_array().and_then(|r| r.first()).cloned();
+                }
+            }
+            None
+        }));
+    }
+    let tmdb_results = join_all(tasks).await;
+    for (i, join_res) in tmdb_results.into_iter().enumerate() {
+        if let Ok(Some(data)) = join_res {
+            let item = &mut results[i];
+            item.tmdb_id = data["id"].as_u64().map(|id| id as u32);
+            item.tmdb_title = data["title"].as_str().or_else(|| data["name"].as_str()).map(|s| s.to_string());
+            if let Some(path) = data["poster_path"].as_str() { item.poster_url = Some(format!("https://image.tmdb.org/t/p/w500{}", path)); }
+            item.vote_average = data["vote_average"].as_f64().map(|v| v as f32);
+            if item.year.is_none() {
+                let date_key = if media_type == "tv" { "first_air_date" } else { "release_date" };
+                item.year = data[date_key].as_str().and_then(|d| d.split('-').next()).map(|s| s.to_string());
+            }
+        }
+    }
+}
+
+/// GET /api/discovery/thuviencine-movies - latest movies from Thuviencine category
+async fn thuviencine_movies(Query(query): Query<ThuviencineQuery>) -> Json<TrendingResponse> {
+    let client = Client::builder()
+        .timeout(std::time::Duration::from_secs(12))
+        .cookie_store(true)
+        .build()
+        .unwrap_or_default();
+    let limit = query.limit.clamp(1, 30);
+    let page = query.page.max(1);
+    let posts_url = format!(
+        "https://thuviencine.xyz/wp-json/wp/v2/posts?categories=2&per_page={}&page={}&_fields=id,title,link,date",
+        limit, page
+    );
+    let posts: Vec<Value> = match client.get(&posts_url).header("User-Agent", "Mozilla/5.0 (FHub)").send().await {
+        Ok(resp) if resp.status().is_success() => resp.json().await.unwrap_or_default(),
+        _ => Vec::new(),
+    };
+    let mut results = Vec::new();
+    for post in posts {
+        let post_id = post["id"].as_u64().unwrap_or(0);
+        if post_id == 0 { continue; }
+        let raw_title = post["title"]["rendered"].as_str().or_else(|| post["title"].as_str()).unwrap_or("Phim lẻ");
+        let title = decode_html_entities(raw_title).trim().to_string();
+        let parsed_title = clean_thuviencine_title(&title);
+        let year = extract_year_from_title(&title);
+        let download_url = format!("https://thuviencine.xyz/download/?id={}", post_id);
+        results.push(TrendingItem {
+            fcode: post_id.to_string(),
+            original_filename: title.clone(),
+            name: parsed_title,
+            url: download_url,
+            size: 0,
+            quality: Some("Thư Viện Cine".to_string()),
+            has_vietsub: true,
+            has_vietdub: false,
+            tmdb_id: None,
+            tmdb_title: None,
+            poster_url: None,
+            vote_average: None,
+            year,
+            media_type: Some("movie".to_string()),
+        });
+    }
+    enrich_thuviencine_items_with_tmdb(&mut results, "movie", &client).await;
+    Json(TrendingResponse { results })
 }
 
 /// GET /api/discovery/thuviencine-tv - latest TV Series from Thuviencine category
@@ -814,33 +905,7 @@ async fn thuviencine_tv_series(Query(query): Query<ThuviencineQuery>) -> Json<Tr
             media_type: Some("tv".to_string()),
         });
     }
-    let mut tasks = Vec::new();
-    for item in results.iter() {
-        let title = extract_core_title(&item.name);
-        let year = item.year.clone();
-        let client = client.clone();
-        tasks.push(tokio::spawn(async move {
-            let mut url = format!("https://api.themoviedb.org/3/search/tv?api_key={}&query={}", TMDB_API_KEY, urlencoding::encode(&title));
-            if let Some(y) = &year { url.push_str(&format!("&first_air_date_year={}", y)); }
-            if let Ok(resp) = client.get(&url).send().await {
-                if let Ok(data) = resp.json::<Value>().await {
-                    return data["results"].as_array().and_then(|r| r.first()).cloned();
-                }
-            }
-            None
-        }));
-    }
-    let tmdb_results = join_all(tasks).await;
-    for (i, join_res) in tmdb_results.into_iter().enumerate() {
-        if let Ok(Some(data)) = join_res {
-            let item = &mut results[i];
-            item.tmdb_id = data["id"].as_u64().map(|id| id as u32);
-            item.tmdb_title = data["name"].as_str().map(|s| s.to_string());
-            if let Some(path) = data["poster_path"].as_str() { item.poster_url = Some(format!("https://image.tmdb.org/t/p/w500{}", path)); }
-            item.vote_average = data["vote_average"].as_f64().map(|v| v as f32);
-            if item.year.is_none() { item.year = data["first_air_date"].as_str().and_then(|d| d.split('-').next()).map(|s| s.to_string()); }
-        }
-    }
+    enrich_thuviencine_items_with_tmdb(&mut results, "tv", &client).await;
     Json(TrendingResponse { results })
 }
 

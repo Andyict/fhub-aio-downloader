@@ -399,6 +399,37 @@ impl DownloadOrchestrator {
             }
         };
 
+        // When the UI supplies a custom root download_folder, keep TMDB organization under it.
+        // Previously selected_download_dir short-circuited to root/filename, so movie downloads
+        // lost their per-movie folder (e.g. Movies/file.mkv instead of Movies/Title (Year)/file.mkv).
+        if let (Some(root), Some(meta)) = (selected_download_dir.as_ref(), tmdb_metadata.as_ref()) {
+            match meta.media_type.as_deref().unwrap_or(category.as_str()) {
+                "movie" => {
+                    let movie_folder = meta.title.as_deref()
+                        .map(|title| {
+                            let clean = PathBuilder::sanitize_filename(title);
+                            if let Some(year) = meta.year { format!("{} ({})", clean, year) } else { clean }
+                        })
+                        .filter(|value| !value.trim().is_empty())
+                        .unwrap_or_else(|| "Unknown Movie".to_string());
+                    let mut base = root.clone();
+                    if let Some(collection) = meta.collection_name.as_deref().map(PathBuilder::sanitize_filename).filter(|value| !value.trim().is_empty()) {
+                        base = base.join(collection);
+                    }
+                    destination = base.join(movie_folder).join(&final_filename).to_string_lossy().to_string();
+                }
+                "tv" => {
+                    let series_folder = meta.title.as_deref()
+                        .map(PathBuilder::sanitize_filename)
+                        .filter(|value| !value.trim().is_empty())
+                        .unwrap_or_else(|| "Unknown Series".to_string());
+                    let season_folder = meta.season.map(|season| format!("Season {:02}", season)).unwrap_or_else(|| "Season 01".to_string());
+                    destination = root.join(series_folder).join(season_folder).join(&final_filename).to_string_lossy().to_string();
+                }
+                _ => {}
+            }
+        }
+
         // Duplicate guard by final destination. FShare folders may contain multiple encodes
         // or links for the same episode with different linkcodes; fshare_code-only duplicate
         // detection is not enough and can create 2x/3x queue entries for one episode.

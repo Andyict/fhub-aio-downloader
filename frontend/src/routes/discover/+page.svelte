@@ -566,15 +566,18 @@
         ? `/api/discovery/thuviencine-tv?limit=24&page=${page}`
         : keyword
           ? `https://api.themoviedb.org/3/discover/${mediaType}?api_key=8d95150f3391194ca66fef44df497ad6&sort_by=popularity.desc&with_keywords=${keyword}&page=${page}`
-          : `/api/discovery/popular-today?${params.toString()}`;
+          : mediaType === "movie"
+            ? `/api/discovery/thuviencine-movies?limit=24&page=${page}`
+            : `/api/discovery/popular-today?${params.toString()}`;
+      const isThuviencineList = isTvSeriesSource || (mediaType === "movie" && !keyword);
       const [popularResponse, trendingResponse] = await Promise.all([
         fetch(popularUrl),
-        isTvSeriesSource ? Promise.resolve(null) : fetch("/api/discovery/trending"),
+        isThuviencineList ? Promise.resolve(null) : fetch("/api/discovery/trending"),
       ]);
 
       if (!popularResponse.ok) throw new Error(await popularResponse.text() || "Không tải được TMDB popular");
       const popularPayload = await popularResponse.json();
-      const nextItems = (popularPayload.results || []).map(isTvSeriesSource ? mapTrending : mapPopular);
+      const nextItems = (popularPayload.results || []).map(isThuviencineList ? mapTrending : mapPopular);
       if (append) {
         const seen = new Set(recommendations.map((item: DiscoverItem) => `${item.type || mediaType}:${item.id || item.title}`));
         const uniqueNext = nextItems.filter((item: DiscoverItem) => {
@@ -592,7 +595,7 @@
       }
       discoveryPage = page;
 
-      if (isTvSeriesSource) {
+      if (isThuviencineList) {
         trending = nextItems.slice(0, 12);
       } else if (trendingResponse?.ok) {
         const trendingPayload = await trendingResponse.json();
@@ -873,6 +876,16 @@
     const filtered = strict.length
       ? strict
       : scored.filter((item) => item.score >= 0.35 && selectedFilm?.year && normalizeTitleText(item.link.original_name || item.link.name).includes(selectedFilm.year)).map((item) => item.link);
+    if (selectedFilm?.type !== "TV") {
+      // Movie searches can legitimately return several encodes/releases for the same title.
+      // Keep all unique URLs so the user can choose quality; only remove exact URL duplicates.
+      const byUrl = new Map<string, FshareResult>();
+      for (const link of filtered) {
+        const key = link.url || `${link.original_name || link.name}|${link.size || 0}`;
+        if (!byUrl.has(key)) byUrl.set(key, link);
+      }
+      return Array.from(byUrl.values()).sort((a, b) => linkQualityRank(b) - linkQualityRank(a) || (b.size || 0) - (a.size || 0));
+    }
     return dedupeDownloadLinks(filtered);
   }
 
@@ -990,7 +1003,8 @@
         if (previewResponse.ok) {
           const preview = await previewResponse.json();
           const rawItems = (preview.items || []).filter((item: PreviewItem) => item.url && !item.is_directory);
-          expanded.push(...dedupePreviewItems(rawItems).map(previewItemToFshareResult));
+          const previewItems = selectedFilm?.type === "TV" ? dedupePreviewItems(rawItems) : rawItems;
+          expanded.push(...previewItems.map(previewItemToFshareResult));
           continue;
         }
       }
@@ -1030,19 +1044,30 @@
         const payload = await response.json();
         rawLinks = payload.results || [];
       }
+      const isTv = selectedFilm?.type === "TV";
       selectedSourceFolderLink = rawLinks.find((link) => link.url && /fshare\.vn\/folder\//i.test(link.url)) || null;
       if (usedExactSource) {
         message = "Đã lấy đúng folder nguồn, đang tách các tập trong folder...";
         selectedLinks = dedupeDownloadLinks(await expandFolderLinks(rawLinks));
       } else {
-        selectedLinks = filterRelevantLinks(rawLinks);
+        // Folder links can contain multiple encodes/files. Expand them before rendering so
+        // movies show selectable file versions instead of a single folder that downloads many files.
+        const candidateLinks = rawLinks.some((link) => link.url && /fshare\.vn\/folder\//i.test(link.url))
+          ? await expandFolderLinks(rawLinks)
+          : rawLinks;
+        const relevantLinks = filterRelevantLinks(candidateLinks);
+        // Show all deduped movie encodes so the user can choose a version,
+        // but do not auto-select/download every variant.
+        selectedLinks = relevantLinks;
       }
       selectedLinkIndex = null;
-      selectedDownloadUrls = selectedLinks.map((link) => link.url || "").filter(Boolean);
+      seriesMode = isTv;
+      selectedDownloadUrls = isTv
+        ? selectedLinks.map((link) => link.url || "").filter(Boolean)
+        : selectedLinks.slice(0, 1).map((link) => link.url || "").filter(Boolean);
       discoveryAutoTrackEnabled = false;
       discoveryAutoTrackId = null;
       await syncDiscoveryAutoTrackState();
-      seriesMode = selectedLinks.length > 1 || selectedFilm?.type === "TV";
       const removed = rawLinks.length - selectedLinks.length;
       message = selectedLinks.length
         ? `${usedExactSource ? "Đã lấy link từ đúng nguồn phim" : "Tìm thấy"} ${selectedLinks.length} bản tải${removed > 0 ? `, đã lọc ${removed} link lệch/trùng.` : "."}`
@@ -1232,7 +1257,9 @@
     confirmDownloadLinks = links;
     confirmDownloadLink = links[0] ?? null;
     showDownloadConfirm = true;
-    message = `Kiểm tra ${links.length} tập rồi bấm Download để xác nhận tải vào NAS.`;
+    message = selectedFilm?.type === "TV"
+      ? `Kiểm tra ${links.length} tập rồi bấm Download để xác nhận tải vào NAS.`
+      : `Kiểm tra ${links.length} phim rồi bấm Download để xác nhận tải vào NAS.`;
   }
 
   async function addRelatedDownload(link: FshareResult) {
@@ -1260,10 +1287,13 @@
         if (!previewResponse.ok) throw new Error(await previewResponse.text() || "Không đọc được folder FShare");
         const preview = await previewResponse.json();
         const rawPreviewItems = (preview.items || []).filter((item: PreviewItem) => item.url && !item.is_directory);
-        itemsToAdd = dedupePreviewItems(rawPreviewItems);
+        const previewItems = dedupePreviewItems(rawPreviewItems);
+        itemsToAdd = selectedFilm?.type === "TV" ? previewItems : previewItems.slice(0, 1);
         if (!itemsToAdd.length) throw new Error("Folder FShare không có file tải được.");
         const removedPreview = rawPreviewItems.length - itemsToAdd.length;
-        message = `Đang thêm ${itemsToAdd.length} file từ folder vào queue${removedPreview > 0 ? `, đã lọc ${removedPreview} file trùng.` : ""}...`;
+        message = selectedFilm?.type === "TV"
+          ? `Đang thêm ${itemsToAdd.length} file từ folder vào queue${removedPreview > 0 ? `, đã lọc ${removedPreview} file trùng.` : ""}...`
+          : `Đang thêm 1 file đã chọn từ folder vào queue${removedPreview > 0 ? `, đã bỏ qua ${removedPreview} file còn lại.` : ""}...`;
       }
 
       const results = await Promise.allSettled(itemsToAdd.map((item) => fetch("/api/downloads", {
@@ -1520,9 +1550,11 @@
         {:else if selectedLinks.length}
           <div class="download-bulk-panel" class:series={seriesMode}>
             <div class="bulk-actions">
-              <strong>{selectedDownloadUrls.length}/{selectedLinks.length} tập đã chọn</strong>
-              <button type="button" onclick={selectAllDownloads}>Chọn hết</button>
-              <button type="button" onclick={clearSelectedDownloads}>Bỏ chọn</button>
+              <strong>{selectedDownloadUrls.length}/{selectedLinks.length} {selectedFilm?.type === "TV" ? "tập" : "bản"} đã chọn</strong>
+              {#if selectedFilm?.type === "TV"}
+                <button type="button" onclick={selectAllDownloads}>Chọn hết</button>
+                <button type="button" onclick={clearSelectedDownloads}>Bỏ chọn</button>
+              {/if}
             </div>
             <div class="discovery-save-card compact">
               <span class="save-card-icon"><span class="material-icons">drive_folder_upload</span></span>
@@ -1565,25 +1597,27 @@
               </label>
             </div>
             <div class="series-download-actions split-actions">
-              <button type="button" class="series-autotrack-btn" class:active={discoveryAutoTrackEnabled} disabled={discoveryAutoTrackLoading} onclick={toggleAutoTrackFromDiscovery} title={discoveryAutoTrackEnabled ? "Tắt Auto Track" : "Bật Auto Track"}>
-                <span class="material-icons">sync</span>
-                <span>{discoveryAutoTrackLoading ? "Đang bật..." : discoveryAutoTrackEnabled ? "Đã bật Auto Track" : "Bật Auto Track"}</span>
-              </button>
-              <button type="button" class="bulk-download-btn" disabled={!selectedDownloadUrls.length || !!addingLinkUrl} onclick={openSelectedDownloadConfirm}>{addingLinkUrl ? "Đang tải..." : `Tải ${selectedDownloadUrls.length} tập đã chọn`}</button>
+              {#if selectedFilm?.type === "TV"}
+                <button type="button" class="series-autotrack-btn" class:active={discoveryAutoTrackEnabled} disabled={discoveryAutoTrackLoading} onclick={toggleAutoTrackFromDiscovery} title={discoveryAutoTrackEnabled ? "Tắt Auto Track" : "Bật Auto Track"}>
+                  <span class="material-icons">sync</span>
+                  <span>{discoveryAutoTrackLoading ? "Đang bật..." : discoveryAutoTrackEnabled ? "Đã bật Auto Track" : "Bật Auto Track"}</span>
+                </button>
+              {/if}
+              <button type="button" class="bulk-download-btn" disabled={!selectedDownloadUrls.length || !!addingLinkUrl} onclick={openSelectedDownloadConfirm}>{addingLinkUrl ? "Đang tải..." : `Tải ${selectedDownloadUrls.length} ${selectedFilm?.type === "TV" ? "tập" : "bản"} đã chọn`}</button>
             </div>
           </div>
           <div class="download-list">
             {#each selectedLinks as link, index}
               <article class="download-row" class:open={selectedLinkIndex === index} class:added={addedLinkUrls.includes(link.url || "")}>
                 <div class="download-toggle-row">
-                  <label class="download-check" aria-label="Chọn tập tải">
+                  <label class="download-check" aria-label={selectedFilm?.type === "TV" ? "Chọn tập tải" : "Chọn bản tải"}>
                     <input type="checkbox" checked={!!link.url && selectedDownloadUrls.includes(link.url)} onchange={() => toggleSelectedDownload(link)} />
                     <span class="select-box"><span class="material-icons">check</span></span>
                   </label>
                   <button class="download-toggle" type="button" onclick={() => selectedLinkIndex = selectedLinkIndex === index ? null : index}>
                     <div>
                       <strong>{displayDownloadTitle(link)}</strong>
-                      <small>{episodeLabelFromName(link.original_name || link.name) || "Chưa rõ tập"} · {link.quality || link.resolution || link.source || "Chưa rõ chất lượng"} · {formatSize(link.size)}</small>
+                      <small>{selectedFilm?.type === "TV" ? (episodeLabelFromName(link.original_name || link.name) || "Chưa rõ tập") : "Phim lẻ"} · {link.quality || link.resolution || link.source || "Chưa rõ chất lượng"} · {formatSize(link.size)}</small>
                     </div>
                     {#if addedLinkUrls.includes(link.url || "")}<span class="download-status-badge">Đã thêm</span>{/if}
                     <span class="material-icons">{selectedLinkIndex === index ? "expand_less" : "expand_more"}</span>
@@ -1600,7 +1634,7 @@
                   </div>
                   <div class="download-actions">
                     <button type="button" disabled={addingLinkUrl === link.url || addedLinkUrls.includes(link.url || "")} class:added={addedLinkUrls.includes(link.url || "")} onclick={(event) => { event.stopPropagation(); openDownloadConfirm(link); }}>
-                      {addingLinkUrl === link.url ? "Đang thêm..." : addedLinkUrls.includes(link.url || "") ? "Đã thêm" : "Thêm riêng tập này"}
+                      {addingLinkUrl === link.url ? "Đang thêm..." : addedLinkUrls.includes(link.url || "") ? "Đã thêm" : selectedFilm?.type === "TV" ? "Thêm riêng tập này" : "Thêm bản này"}
                     </button>
                   </div>
                   {#if link.url && linkErrors[link.url]}<p class="download-error">{linkErrors[link.url]}</p>{/if}
@@ -1684,7 +1718,7 @@
         <span class="material-icons modal-icon">download_for_offline</span>
         <div>
           <h2>Xác nhận download?</h2>
-          <p>{confirmDownloadLinks.length ? `${confirmDownloadLinks.length} tập sẽ được tải vào queue NAS.` : "1 bản tải sẽ được tải vào queue NAS."}</p>
+          <p>{confirmDownloadLinks.length ? `${confirmDownloadLinks.length} ${selectedFilm?.type === "TV" ? "tập" : "bản"} sẽ được tải vào queue NAS.` : "1 bản tải sẽ được tải vào queue NAS."}</p>
         </div>
       </div>
       {#if confirmDownloadLinks.length}
@@ -1692,9 +1726,9 @@
           {#each confirmDownloadLinks.slice(0, 5) as link}
             <strong title={link.original_name || link.name}>{link.original_name || link.name || "Bản tải FShare"}</strong>
           {/each}
-          {#if confirmDownloadLinks.length > 5}<small>+{confirmDownloadLinks.length - 5} tập khác</small>{/if}
+          {#if confirmDownloadLinks.length > 5}<small>+{confirmDownloadLinks.length - 5} {selectedFilm?.type === "TV" ? "tập" : "bản"} khác</small>{/if}
         </div>
-        <div class="confirm-box"><span>Số tập</span><strong>{confirmDownloadLinks.length}</strong></div>
+        <div class="confirm-box"><span>{selectedFilm?.type === "TV" ? "Số tập" : "Số bản"}</span><strong>{confirmDownloadLinks.length}</strong></div>
         <div class="confirm-box"><span>Kiểu tải</span><strong>{seriesMode ? "Phim bộ" : "Phim lẻ"}</strong></div>
         <div class="confirm-box"><span>Lưu vào</span><strong>{selectedDownloadCategoryLabel}</strong></div>
       {:else if confirmDownloadLink}
